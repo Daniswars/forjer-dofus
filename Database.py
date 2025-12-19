@@ -401,7 +401,7 @@ if __name__ == "__main__":
     # - Hoja 'Fallos': 3 filas para "Anillo de los Cielos".
     # - Hoja 'Exitos': Sin cambios.
 
-    # Paso 4: Añadir el registro de 'Success'. Este paso debería consolidar todo.
+    # Paso 4: Añadir el registro de 'Success'. Este paso debería consolidar.
     print("\n>>> Añadiendo 'Success' para 'Anillo de los Cielos'. Esto debería consolidar todo.")
     # Se simula que el usuario ha comprado el objeto base a 50.000 kamas y lo vende a 300.000.
     # No se usa modo encadenado, por lo que se pide manualmente los precios.
