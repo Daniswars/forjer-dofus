@@ -11,15 +11,32 @@ FILA_DESNIVEL = 70
 def get_fila_y(idx):
     return FILA_Y_INICIAL + idx * FILA_DESNIVEL
 
+# acelerar interacción: desactivar failsafe y reducir pausa global
+pyautogui.FAILSAFE = False
+pyautogui.PAUSE = 0.03
+
 def click(x, y):
-    pyautogui.click(x=x, y=y)
-    time.sleep(0.25)
+    """
+    Realiza un único click fiable en (x, y).
+    """
+    try:
+        pyautogui.moveTo(x, y, duration=0.05)
+        pyautogui.click()
+    except Exception:
+        pass
+    time.sleep(0.06)
+
+def ensure_ui_active():
+    # presionar Alt brevemente para "desatascar" la UI después de interacciones
+    try:
+        pyautogui.press('alt')
+        time.sleep(0.04)
+    except Exception:
+        pass
 
 def todas_estadisticas_al_60(estadisticas_actuales, estadisticas_min):
     # Devuelve True si todas las stats alcanzan al menos el 60% del mínimo
     for i in range(len(estadisticas_actuales)):
-        if i >= len(estadisticas_min):
-            return False
         if estadisticas_actuales[i] < estadisticas_min[i] * 0.6:
             return False
     return True
@@ -31,6 +48,8 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max):
     Lógica adaptada desde maguear.py: manejo de casos críticos (<30% min),
     fase "60%" y selección de columna según tipo de runa.
     """
+    # Asegurarnos de que la UI está activa al empezar
+    ensure_ui_active()
 
     # Listas de tipos de runas (prioridades)
     runas_tochas = ["pa", "pm", "al", "inv", "da", "cri"]
@@ -69,8 +88,8 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max):
             # Re_emp prioritario: usar columna media/grande según criterio simple
             if obj in runas_re_emp:
                 x = COLUMNAS_X[1]
-                print(f"[CRITICO re_emp] click en ({x},{y}) para {obj} (actual {actual} <= min {minimo})")
                 click(x, y)
+                ensure_ui_active()
                 continue
 
             # Selección por tipo
@@ -104,6 +123,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max):
 
             print(f"[CRITICO] click en ({x},{y}) para stat {obj} (actual {actual} < 30% min {minimo})")
             click(x, y)
+            ensure_ui_active()
 
     # Segunda fase: si todas las stats alcanzan al menos 60% del mínimo, aplicar segunda lógica
     if todas_estadisticas_al_60(stats_actuales, stats_min):
@@ -135,6 +155,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max):
 
                 print(f"[60% FASE] click en ({x},{y}) para stat {obj} (actual {actual} < min {minimo})")
                 click(x, y)
+                ensure_ui_active()
 
 # --- NUEVO: asegurar que el root del proyecto esté en sys.path para imports locales ---
 def ensure_project_in_path():
@@ -176,8 +197,8 @@ if __name__ == "__main__":
         exit(1)
 
     print("Preparando OCR para extraer valores actuales...")
-    time.sleep(1.5)
-    valores_actuales, texto_ocr = Mage_Data_Extractor.capture_and_read_numbers()
+    time.sleep(0.5)
+    valores_actuales, texto_ocr = Mage_Data_Extractor.capture_and_read_stats()
     print("Valores actuales detectados:", valores_actuales)
 
     if len(valores_actuales) != len(stats_db["obj"]):
