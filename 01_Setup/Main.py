@@ -1,36 +1,38 @@
 import time
-import pyautogui
+import sys
+from pathlib import Path
 
+# Asegurar imports locales
+root = Path(__file__).parent
+if str(root) not in sys.path:
+    sys.path.insert(0, str(root))
+# permitir buscar un nivel arriba también
+parent = str(root.parent)
+if parent not in sys.path:
+    sys.path.insert(0, parent)
+
+import pyautogui
 from Mage_Data_Extractor import capture_and_read_stats
 from Mage_Introduce_Runes import mage_introduce_runes
 from Mage_Introduce_Exo import introducir_exo
 from Mage_Exo_Verify import verify_success
-# --- Nuevo: importar módulo de correo (alineado con main.py) ---
 import Extra_Correo as Correo
-
-# Coordenadas del área de lectura: (x1,y1) -> (x2,y2)
-X1, Y1 = 1512, 761
-X2, Y2 = 1863, 1634
-REGION = (X1, Y1, X2 - X1, Y2 - Y1)  # (x, y, width, height)
+from Extra_get_kamas import get_kamas
+from Extra_Database import agregar_datos
+import Setup_Item_Stats_Database
 
 # acelerar interacción
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.03
 
 def ensure_ui_active():
-    # presionar Alt brevemente para "desatascar" la UI
     try:
         pyautogui.press('alt')
         time.sleep(0.06)
     except Exception:
         pass
 
-# --- Cambiado: comprobar según stats_min (toma missing como 0) ---
 def stats_within_limits(stats_actuales, stats_min, stats_max):
-    """
-    Returns True if all stats are >= min (ignora stats_max aquí porque se usa en otras comprobaciones).
-    Se itera sobre stats_min: si falta un valor en stats_actuales se considera 0 (no cumple).
-    """
     n = len(stats_min)
     for i in range(n):
         actual = stats_actuales[i] if i < len(stats_actuales) else 0
@@ -38,12 +40,7 @@ def stats_within_limits(stats_actuales, stats_min, stats_max):
             return False
     return True
 
-# --- Nuevas helpers: reintentos y normalización de lecturas ---
 def capture_with_retries(attempts=3, wait_between=0.4):
-    """
-    Usa capture_and_read_stats() y reintenta si la lectura parece vacía o inestable.
-    Devuelve (valores, texto).
-    """
     last_vals, last_text = [], ""
     for attempt in range(1, attempts + 1):
         start = time.time()
@@ -52,30 +49,21 @@ def capture_with_retries(attempts=3, wait_between=0.4):
         suma = sum(valores) if valores else 0
         nonzeros = sum(1 for v in (valores or []) if v != 0)
         print(f"Tiempo transcurrido en captura y OCR: {elapsed:.2f}s (intento {attempt}) - suma={suma} nonzeros={nonzeros}")
-        # si hay al menos un número y no es todo cero, aceptamos
         if suma > 0 and nonzeros > 0:
             return valores, texto
-        # guardamos última lectura por si no hay mejoría
         last_vals, last_text = valores, texto
         if attempt < attempts:
             print("Lectura dudosa (ceros/ruido). Reintentando captura OCR...")
             time.sleep(wait_between)
             ensure_ui_active()
-    # devolver la última lectura aunque sea cero
     return last_vals, last_text
 
 def sanitize_and_align(valores_actuales, target_len):
-    """
-    - Si la primera fila siempre sale 0 y la segunda tiene valor, desplazar (descartar la primera).
-    - Recortar o rellenar con ceros para que la lista tenga exactamente target_len.
-    """
     if not valores_actuales:
         valores_actuales = []
-    # posible bug: primera fila 0 y segunda con valor -> desplazar
     if len(valores_actuales) >= 2 and valores_actuales[0] == 0 and valores_actuales[1] > 0:
         print("Saneando lectura inicial: descartando primera fila (0) ya que la segunda tiene valor.")
         valores_actuales = valores_actuales[1:]
-    # ajustar longitud
     if len(valores_actuales) < target_len:
         valores_actuales = valores_actuales + [0] * (target_len - len(valores_actuales))
     elif len(valores_actuales) > target_len:
@@ -93,15 +81,9 @@ def normalize_prev(prev, target_len):
     return p
 
 def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
-    """
-    Ahora itera hasta que todas las stats >= stats_min.
-    Devuelve un dict resumen con llaves: success (bool), attempts (int), elapsed (float),
-    time_per_attempt (float), error (str|None).
-    """
     print(f"Starting mage loop for item: {item_name}")
     ensure_ui_active()
 
-    # --- Enviar correo de inicio ---
     try:
         Correo.send_mail(item_name, "inicio magueo")
     except Exception as e:
@@ -112,9 +94,9 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
     prev_stats = None
     target_len = len(item_stats["min"])
     start_time = time.time()
+
     try:
         while True:
-            # extraer stats actuales con reintentos y normalizar a la longitud de stats_min
             stats_actuales, _ = capture_with_retries(attempts=3, wait_between=0.2)
             stats_actuales = sanitize_and_align(stats_actuales, target_len)
 
@@ -126,17 +108,15 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
 
             print("Current stats:", stats_actuales)
 
-            # si ya están dentro -> exo
             if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
                 print("Stats within limits -> introducing exo.")
                 introducir_exo()
-                time.sleep(0.25)  # pequeño tiempo para que la UI procese
+                time.sleep(0.25)
                 print("Verifying exo...")
                 if verify_success():
                     elapsed = time.time() - start_time
                     time_per_attempt = elapsed / max(1, iterations)
                     print("Exo successful. Finished.")
-                    # --- ENVIAR correo de éxito con clave exigida por el usuario ---
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception as e:
@@ -154,8 +134,6 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                     ensure_ui_active()
                     iterations += 1
                     print(f"Iteration {iterations} -> stats: {stats_actuales}")
-
-                    # --- NUEVO: enviar correo cada 10 intentos indicando que son de exo PA ---
                     if iterations % 10 == 0:
                         try:
                             Correo.send_mail(item_name, "10 intentos exo PA")
@@ -163,17 +141,15 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                             print("Aviso: no se pudo enviar correo de 10 intentos exo PA:", e)
                     continue
 
-            # si no están dentro, aplicar runas hasta que lo estén (o se alcance seguridad)
             print("Applying runes until stats >= min...")
             prev_stats = normalize_prev(prev_stats, target_len)
             while not stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
                 if max_iterations is not None and iterations >= max_iterations:
                     elapsed = time.time() - start_time
-                    print(f"Reached max_iterations ({max_iterations}). Aborting rune loop.")
                     try:
                         Correo.send_mail(item_name, "10 intentos")
-                    except Exception as e:
-                        print("Aviso: no se pudo enviar correo de max_iterations:", e)
+                    except Exception:
+                        pass
                     return {
                         "success": False,
                         "attempts": iterations,
@@ -194,7 +170,6 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                     print("ERROR en mage_introduce_runes:", repr(e))
                     time.sleep(0.2)
                     ensure_ui_active()
-                    # continuar el bucle tras error puntual
                     continue
 
                 time.sleep(0.12)
@@ -208,14 +183,20 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                     stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
                     stats_actuales = sanitize_and_align(stats_actuales, target_len)
 
-                # detectar no progreso (comparando listas normalizadas)
+                iterations += 1
+                print(f"Iteration {iterations} -> stats: {stats_actuales}")
+                if iterations % 10 == 0:
+                    try:
+                        Correo.send_mail(item_name, "10 intentos exo PA")
+                    except Exception as e:
+                        print("Aviso: no se pudo enviar correo de 10 intentos exo PA:", e)
+
                 if prev_stats is not None and stats_actuales == prev_stats:
                     no_progress_count += 1
                     print(f"No progress ({no_progress_count}/{no_progress_limit})")
                     if no_progress_count >= no_progress_limit:
                         elapsed = time.time() - start_time
                         print("No progress after several iterations. Aborting to avoid infinite loop.")
-                        # --- ENVIAR correo "Sin runas" antes de abortar ---
                         try:
                             Correo.send_mail(item_name, "Sin runas")
                         except Exception as e:
@@ -239,9 +220,8 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
         print("ERROR crítico en mage_main:", repr(e))
         try:
             Correo.send_mail(item_name, "Finalizar forzado")
-        except Exception as ee:
-            print("Aviso: no se pudo enviar correo tras error crítico:", ee)
-        # Devolver resumen de fallo en lugar de relanzar para que el invocador pueda guardar datos
+        except Exception:
+            pass
         return {
             "success": False,
             "attempts": iterations,
@@ -250,20 +230,71 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
             "error": repr(e)
         }
 
-if __name__ == "__main__":
-    # Example usage: ask for item name and load stats from Setup_Item_Stats_Database
-    time.sleep(0.6)  # menos espera antes de iniciar
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    import Setup_Item_Stats_Database
+# ----------------- CAMBIO: nueva fase de SETUP y main reestructurado -----------------
+def setup_phase():
+    """
+    Fase de setup: pedir nombre del objeto, obtener stats y leer kamas iniciales.
+    Devuelve (item_name, item_stats, kamas_iniciales) o (None, None, None) si se aborta.
+    """
+    item_name = input("Enter item name: ").strip()
+    if not item_name:
+        print("No se ha introducido ningún nombre de objeto. Abortando setup.")
+        return None, None, None
 
-    item_name = "Anillo de Noai Aludem"
     item_stats = Setup_Item_Stats_Database.get_item_stats(item_name)
     if not item_stats:
-        print("Item not found in database.")
-        sys.exit(1)
+        print(f"Item '{item_name}' no encontrado en la base de datos. Abortando setup.")
+        return None, None, None
 
-    # por defecto sin límite: funcionará hasta que stats >= min o hasta que no-progreso cause abort
+    print("Leyendo kamas iniciales (setup)...")
+    try:
+        kamas_iniciales = get_kamas()
+    except Exception as e:
+        print("Error leyendo kamas iniciales en setup:", e)
+        kamas_iniciales = 0
+
+    return item_name, item_stats, kamas_iniciales
+
+def main():
+    # Primera: SETUP
+    item_name, item_stats, kamas_iniciales = setup_phase()
+    if not item_name or not item_stats:
+        print("Setup no completado. Saliendo.")
+        return
+
+    # Segunda: MAGE (ejecutar el bucle principal con los datos del setup)
+    start_time = time.time()
     result = mage_main(item_name, item_stats, max_iterations=None)
-    print("Result summary:", result)
+    elapsed_total = time.time() - start_time
+
+    # Lectura kamas final y guardado en BD
+    print("Leyendo kamas finales...")
+    try:
+        kamas_finales = get_kamas()
+    except Exception as e:
+        print("Error leyendo kamas finales:", e)
+        kamas_finales = 0
+
+    attempts = result.get("attempts", 0) if isinstance(result, dict) else 0
+    time_per_attempt = result.get("time_per_attempt", 0) if isinstance(result, dict) else (elapsed_total / max(1, attempts))
+    success_flag = result.get("success", False) if isinstance(result, dict) else False
+    exito_str = "Success" if success_flag else "Fail"
+
+    print(f"Resumen: item={item_name}, attempts={attempts}, exito={exito_str}, kamas_iniciales={kamas_iniciales}, kamas_finales={kamas_finales}")
+
+    # Guardar en la base de datos Excel
+    try:
+        agregar_datos(
+            objeto_seleccionado=item_name,
+            intentos=attempts,
+            kamas_iniciales=kamas_iniciales,
+            kamas_finales=kamas_finales,
+            exito=exito_str,
+            tiempo_medio_intento=time_per_attempt,
+            modo_encadenado_activo=False
+        )
+    except Exception as e:
+        print("Error guardando datos en la base de datos:", e)
+
+if __name__ == "__main__":
+    main()

@@ -135,7 +135,7 @@ def get_kamas():
         if total_kamas > 0 and total_kamas <= 150000000:
             print(f"DEBUG_GET_KAMAS: Valid total kamas detected: {total_kamas}. Returning.")
             return total_kamas
-        elif total_kamas > 100000000:
+        elif total_kamas > 10000000000:
             print(f"WARNING_GET_KAMAS: Total kamas ({total_kamas}) exceeds sanity check of 150,000,000. Assuming OCR error and returning 0.")
             return 0 # Exit immediately if it's an absurdly high number
 
@@ -146,6 +146,6 @@ def get_kamas():
 
 # Example usage (for testing this module directly)
 if __name__ == "__main__":
-    print("--- Running get_kamas.py directly for testing ---")
+    print("--- Running Extra_get_kamas.py directly for testing ---")
     current_kamas = get_kamas()
     print(f"Final Kamas read: {current_kamas}")

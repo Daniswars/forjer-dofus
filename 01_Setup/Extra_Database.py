@@ -26,7 +26,9 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
     """
 
     # --- Configuración ---
-    ruta_archivo_excel = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\Base de datos dofus 3.xlsx"
+    # Archivo pedido por el usuario
+    ruta_archivo_excel = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\20260213_Dofus3_Mage_Database.xlsx"
+
     nombre_hoja_fallos = "Fallos Forjamagia"
     nombre_hoja_exitos = "Exitos Forjamagia"
 
@@ -341,7 +343,15 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
         print(f"DEBUG_SAVE: Datos guardados exitosamente en '{ruta_archivo_excel}'.")
     except Exception as e:
         print(f"ERROR_SAVE: Error al guardar el archivo Excel: {e}")
-        print("ERROR_SAVE: Asegúrate de que el archivo no esté abierto en otra aplicación (como Excel).")
+        # Intento fallback: guardar con sufijo timestamp para no perder datos
+        try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fallback_path = ruta_archivo_excel.replace(".xlsx", f".{ts}.xlsx")
+            libro_excel.save(fallback_path)
+            print(f"DEBUG_SAVE: Fallback guardado en '{fallback_path}'. Revisa y renombra manualmente si es necesario.")
+        except Exception as e2:
+            print(f"ERROR_SAVE: Fallback también falló: {e2}")
+            print("ERROR_SAVE: Asegúrate de que el archivo no esté abierto en otra aplicación (como Excel).")
     print(f"--- Finaliza agregar_datos para '{objeto_seleccionado}' ---\n")
 
 
@@ -448,3 +458,4 @@ if __name__ == "__main__":
     print(
         ">>>   - 'Rentabilidad Kamas/hora': vacía (o calculada si ya tenías una fórmula).")  # Ajusta según tu lógica actual
     print("=" * 80)
+

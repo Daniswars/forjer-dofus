@@ -2,8 +2,8 @@ import os
 import time
 import pytesseract
 import pyautogui
-# Reutiliza funciones desde get_kamas.py
-from get_kamas import preprocess_image, wait_for_maguear_text
+# Reutiliza funciones desde Extra_get_kamas.py
+from Extra_get_kamas import preprocess_image, wait_for_maguear_text
 
 # Asegura la ruta al ejecutable de Tesseract (requerido por el usuario)
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'

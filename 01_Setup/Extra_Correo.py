@@ -16,6 +16,9 @@ def send_mail(item, exito):
     if exito == "10 intentos":
         subject = "10 intentos llevados a cabo"
         body = f"{item} se está magueando"
+    elif exito == "10 intentos exo PA":
+        subject = "10 intentos - exo PA"
+        body = f"Se han realizado 10 intentos de introducir EXO PA para: {item}"
     elif exito == "inicio magueo":
         subject = "Magueo iniciado"
         body = f"{item} se está magueando"
@@ -23,6 +26,10 @@ def send_mail(item, exito):
         subject = "Programa finalizado"
         body = f"{item} se ha finalizado"
     elif exito == "¡Éxito!":
+        subject = "Éxito PA"
+        body = f"{item} ha sido magueado"
+    elif exito == "Exito PA":
+        # Nueva clave aceptada: comportamiento idéntico a "¡Éxito!"
         subject = "Éxito PA"
         body = f"{item} ha sido magueado"
     elif exito == "Sin runas":
