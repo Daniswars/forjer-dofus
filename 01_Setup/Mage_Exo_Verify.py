@@ -2,8 +2,7 @@ import time
 import pytesseract
 import pyautogui
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
-from tkinter import messagebox
-import Correo
+import Extra_Correo
 
 def verify_success():
     """
@@ -25,7 +24,7 @@ def verify_success():
     if ("AP" in text_area or "PM" in text_area or "PA" in text_area or
         "range" in text_area or "invocation" in text_area):
         success = True
-        Correo.send_mail("Success", 1)
+        Extra_Correo.send_mail("Success", 1)
     else:
         success = False
 

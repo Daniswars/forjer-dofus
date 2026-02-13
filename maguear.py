@@ -391,3 +391,4 @@ def click(celda_x, celda_y):
     # Perform the click
     pyautogui.click(x=celda_x, y=celda_y)
     time.sleep(0.25)  # Short delay after each click
+

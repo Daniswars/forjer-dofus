@@ -1,10 +1,8 @@
-import os
 import time
 import pytesseract
 import pyautogui
-from PIL import Image
 # Reutiliza funciones desde get_kamas.py
-from get_kamas import preprocess_image, wait_for_maguear_text
+from get_kamas import preprocess_image
 
 REGION_ITEM = (2539, 492, 2731 - 2539, 538 - 492)  # (x, y, width, height)
 

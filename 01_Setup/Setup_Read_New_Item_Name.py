@@ -2,7 +2,6 @@ import os
 import time
 import pytesseract
 import pyautogui
-from PIL import Image
 # Reutiliza funciones desde get_kamas.py
 from get_kamas import preprocess_image, wait_for_maguear_text
 

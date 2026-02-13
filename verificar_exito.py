@@ -2,7 +2,6 @@ import time
 import pytesseract
 import pyautogui
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
-from tkinter import messagebox
 import Correo
 
 def verificar_exito():
