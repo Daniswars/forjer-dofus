@@ -92,6 +92,20 @@ def normalize_prev(prev, target_len):
         p = p[:target_len]
     return p
 
+# --- Nuevo: importar Main_Save_Data de forma robusta ---
+try:
+    import Main_Save_Data as DataSaver
+except Exception:
+    # intentar añadir carpeta padre al path y reintentar
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent))
+    try:
+        import Main_Save_Data as DataSaver
+    except Exception as e:
+        DataSaver = None
+        print("WARNING: no se pudo importar Main_Save_Data, las funciones de guardado no estarán disponibles:", e)
+
 def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
     """
     Ahora itera hasta que todas las stats >= stats_min.
@@ -106,6 +120,17 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
         Correo.send_mail(item_name, "inicio magueo")
     except Exception as e:
         print("Aviso: no se pudo enviar correo de inicio:", e)
+
+    # --- Nuevo: guardar kamas iniciales usando Main_Save_Data.save_initial_kamas ---
+    initial_kamas_saved = None
+    if DataSaver is not None:
+        try:
+            initial_kamas_saved = DataSaver.save_initial_kamas(item_name)
+            print(f"DEBUG_SAVEFLOW: Kamas iniciales guardadas: {initial_kamas_saved}")
+        except Exception as e:
+            print("WARNING: fallo al guardar kamas iniciales con Main_Save_Data:", e)
+    else:
+        print("WARNING: DataSaver no disponible, no se guardarán kamas iniciales automáticamente.")
 
     iterations = 0
     no_progress_count = 0
@@ -136,11 +161,35 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                     elapsed = time.time() - start_time
                     time_per_attempt = elapsed / max(1, iterations)
                     print("Exo successful. Finished.")
-                    # --- ENVIAR correo de éxito con clave exigida por el usuario ---
+                    # --- ENVIAR correo de éxito ---
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception as e:
                         print("Aviso: no se pudo enviar correo de éxito:", e)
+
+                    # --- NUEVO: llamar a Main_Save_Data.finalize_session para guardar éxito ---
+                    if DataSaver is not None:
+                        try:
+                            attempts_to_save = max(1, iterations)
+                            tiempo_promedio_guardar = time_per_attempt
+                            print("DEBUG_SAVEFLOW: Guardando resultado SUCCESS en Excel mediante Main_Save_Data.finalize_session...")
+                            saved = DataSaver.finalize_session(
+                                objeto=item_name,
+                                intentos=attempts_to_save,
+                                exito="PA",
+                                tiempo_medio_intento=tiempo_promedio_guardar,
+                                modo_encadenado_activo=True,
+                                precio_objeto_base=None,
+                                precio_venta_objeto_final=None,
+                                tipo_exo="PA",
+                                kamas_iniciales_arg=None
+                            )
+                            print(f"DEBUG_SAVEFLOW: finalize_session returned: {saved}")
+                        except Exception as e:
+                            print("ERROR: fallo al guardar éxito con Main_Save_Data:", e)
+                    else:
+                        print("WARNING: DataSaver no disponible, no se guardó el resultado en Excel.")
+
                     return {
                         "success": True,
                         "attempts": iterations,
@@ -220,6 +269,30 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                             Correo.send_mail(item_name, "Sin runas")
                         except Exception as e:
                             print("Aviso: no se pudo enviar correo 'Sin runas':", e)
+
+                        # --- NUEVO: guardar como fallo usando Main_Save_Data.finalize_session ---
+                        if DataSaver is not None:
+                            try:
+                                attempts_to_save = max(1, iterations)
+                                tiempo_promedio_guardar = (elapsed / attempts_to_save) if attempts_to_save > 0 else 0.0
+                                print("DEBUG_SAVEFLOW: Guardando resultado FAIL en Excel mediante Main_Save_Data.finalize_session...")
+                                saved = DataSaver.finalize_session(
+                                    objeto=item_name,
+                                    intentos=attempts_to_save,
+                                    exito=0,
+                                    tiempo_medio_intento=tiempo_promedio_guardar,
+                                    modo_encadenado_activo=True,
+                                    precio_objeto_base=None,
+                                    precio_venta_objeto_final=None,
+                                    tipo_exo=None,
+                                    kamas_iniciales_arg=None
+                                )
+                                print(f"DEBUG_SAVEFLOW: finalize_session returned: {saved}")
+                            except Exception as e:
+                                print("ERROR: fallo al guardar fallo con Main_Save_Data:", e)
+                        else:
+                            print("WARNING: DataSaver no disponible, no se guardó el fallo en Excel.")
+
                         return {
                             "success": False,
                             "attempts": iterations,
@@ -241,7 +314,27 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
             Correo.send_mail(item_name, "Finalizar forzado")
         except Exception as ee:
             print("Aviso: no se pudo enviar correo tras error crítico:", ee)
-        # Devolver resumen de fallo en lugar de relanzar para que el invocador pueda guardar datos
+
+        # Intentar guardar como fallo ante error crítico
+        if DataSaver is not None:
+            try:
+                attempts_to_save = max(1, iterations)
+                tiempo_promedio_guardar = (elapsed / attempts_to_save) if attempts_to_save > 0 else 0.0
+                print("DEBUG_SAVEFLOW: Guardando resultado FAIL (error crítico) en Excel mediante Main_Save_Data.finalize_session...")
+                DataSaver.finalize_session(
+                    objeto=item_name,
+                    intentos=attempts_to_save,
+                    exito=0,
+                    tiempo_medio_intento=tiempo_promedio_guardar,
+                    modo_encadenado_activo=True,
+                    precio_objeto_base=None,
+                    precio_venta_objeto_final=None,
+                    tipo_exo=None,
+                    kamas_iniciales_arg=None
+                )
+            except Exception as e2:
+                print("ERROR: fallo al guardar fallo por error crítico con Main_Save_Data:", e2)
+
         return {
             "success": False,
             "attempts": iterations,
@@ -258,7 +351,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import Setup_Item_Stats_Database
 
-    item_name = "Anillo de Noai Aludem"
+    item_name = "Anillo del Conde Kontatras"
     item_stats = Setup_Item_Stats_Database.get_item_stats(item_name)
     if not item_stats:
         print("Item not found in database.")

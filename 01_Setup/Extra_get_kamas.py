@@ -73,7 +73,7 @@ def wait_for_maguear_text():
 def get_kamas():
     """
     Reads the current kamas and rune count from the Dofus interface.
-    Includes pre-processing, multiple retries for accuracy, and a sanity check.
+    Ajustes: acepta totales grandes (hasta UPPER_LIMIT) para no descartar lecturas válidas.
     """
     print("\nDEBUG_GET_KAMAS: Starting kamas and rune value retrieval...")
 
@@ -95,14 +95,15 @@ def get_kamas():
     carpeta_capturas = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\capturas kamas"
     os.makedirs(carpeta_capturas, exist_ok=True)
 
+    # Nuevo umbral superior: aceptar hasta 100.000.000.000 (100 mil millones)
+    UPPER_LIMIT = 100_000_000_000
     max_retries_ocr = 5
     for attempt in range(max_retries_ocr):
         print(f"DEBUG_GET_KAMAS: OCR attempt {attempt + 1}/{max_retries_ocr}...")
 
-        # --- Mueve el ratón a la posición especificada antes de la captura ---
+        # Mejorar estabilidad: mover ratón antes de captura (ya presente)
         pyautogui.moveTo(2697, 1075)
         time.sleep(0.2)
-        # --- Fin de la modificación ---
 
         # Capture and preprocess image for Kamas
         capture_kamas_img = pyautogui.screenshot(
@@ -131,13 +132,16 @@ def get_kamas():
         print(f"DEBUG_GET_KAMAS: Extracted Kamas: {valor_kamas}")
         print(f"DEBUG_GET_KAMAS: Calculated Total: {total_kamas}")
 
-        # Sanity check: if total_kamas is greater than 0 and within a reasonable range
-        if total_kamas > 0 and total_kamas <= 150000000:
-            print(f"DEBUG_GET_KAMAS: Valid total kamas detected: {total_kamas}. Returning.")
+        # Sanity check: aceptar totales hasta UPPER_LIMIT
+        if total_kamas > 0 and total_kamas <= UPPER_LIMIT:
+            print(f"DEBUG_GET_KAMAS: Valid total kamas detected: {total_kamas} (<= {UPPER_LIMIT}). Returning.")
             return total_kamas
-        elif total_kamas > 10000000000:
-            print(f"WARNING_GET_KAMAS: Total kamas ({total_kamas}) exceeds sanity check of 150,000,000. Assuming OCR error and returning 0.")
-            return 0 # Exit immediately if it's an absurdly high number
+
+        # Si es 0 o negativo o supera el límite, reintentar pero informar
+        if total_kamas <= 0:
+            print("DEBUG_GET_KAMAS: Total kamas es 0 o negativo. Reintentando...")
+        else:
+            print(f"WARNING_GET_KAMAS: Total kamas ({total_kamas}) supera el umbral aceptado ({UPPER_LIMIT}). Trataremos como posible OCR erróneo y reintentaremos.")
 
         time.sleep(1) # Short delay before next OCR attempt
 

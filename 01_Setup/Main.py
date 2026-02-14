@@ -233,12 +233,35 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
 # ----------------- CAMBIO: nueva fase de SETUP y main reestructurado -----------------
 def setup_phase():
     """
-    Fase de setup: pedir nombre del objeto, obtener stats y leer kamas iniciales.
-    Devuelve (item_name, item_stats, kamas_iniciales) o (None, None, None) si se aborta.
+    Fase de setup: obtener el nombre del objeto automáticamente desde Setup_Item_Stats_Database
+    y leer kamas iniciales. No pide input al usuario.
+    Devuelve (item_name, item_stats, kamas_iniciales) o (None, None, None) si no se obtiene el nombre.
     """
-    item_name = input("Enter item name: ").strip()
+    # Intentar varias funciones posibles que el módulo de setup podría exponer
+    candidates = [
+        "get_selected_item_name",
+        "get_current_item_name",
+        "detect_item_name",
+        "get_item_from_ui",
+        "auto_get_item_name",
+        "get_item_name",
+        "get_item",
+        "get_item_stats_by_screen"
+    ]
+    item_name = None
+    for fn_name in candidates:
+        fn = getattr(Setup_Item_Stats_Database, fn_name, None)
+        if callable(fn):
+            try:
+                item_name = fn()
+                if item_name:
+                    print(f"SETUP: nombre de objeto detectado por '{fn_name}': {item_name}")
+                    break
+            except Exception as e:
+                print(f"SETUP: la función '{fn_name}' falló: {e}")
+
     if not item_name:
-        print("No se ha introducido ningún nombre de objeto. Abortando setup.")
+        print("ERROR_SETUP: No se pudo obtener el nombre del objeto automáticamente desde Setup_Item_Stats_Database. Abortando setup.")
         return None, None, None
 
     item_stats = Setup_Item_Stats_Database.get_item_stats(item_name)
