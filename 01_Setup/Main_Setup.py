@@ -28,8 +28,12 @@ def main():
     Setup_Equipo_Recursos.main("Equipo")  # o "Recursos" según
     Setup_Ring.main()
 
+    Setup_Equipo_Recursos.main("Recursos")  # o "Recursos" según
+
     print("Setup completado. Item:", Setup_Item_Name)
     return Setup_Item_Name, Setup_Stats
+
+
 
 if __name__ == "__main__":
     main()
