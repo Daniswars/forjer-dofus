@@ -211,40 +211,95 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             print("ERROR en Mage_Main:", e)
             result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": repr(e)}
 
-        # Si se pidió stop mientras magistraba, aún intentamos guardar lo que hay
+        # Interpretar resultado
         success_flag = result.get("success", False) if isinstance(result, dict) else False
-        attempts_result = result.get("attempts", 0) if isinstance(result, dict) else 0
+        error_code = result.get("error", None) if isinstance(result, dict) else None
         time_per_attempt = result.get("time_per_attempt", None) if isinstance(result, dict) else None
 
-        # 4) Guardado final de esta iteración
+        # Intentos a guardar: SOLO desde contador de exo (introducir_exo)
+        attempts_to_save = shared_state.get("exo_attempts", 0)
+        # Nota: si no ha habido ningún intento de exo, attempts_to_save puede ser 0 (se respeta)
+
+        # 4) Comportamiento específico: si no_progress -> guardar fallo, popup y TERMINAR el bucle
+        if error_code == "no_progress":
+            print("DEBUG: No progress detectado (sin runas). Guardando como fallo y deteniendo.")
+            if DataSaver is not None:
+                try:
+                    status_var.set("Guardando fallo (sin runas)...")
+                    saved = DataSaver.finalize_session(
+                        objeto=item_name,
+                        intentos=attempts_to_save,
+                        exito=0,
+                        tiempo_medio_intento=time_per_attempt,
+                        modo_encadenado_activo=True,
+                        precio_objeto_base=None,
+                        precio_venta_objeto_final=None,
+                        tipo_exo=None,
+                        kamas_iniciales_arg=None
+                    )
+                    print(f"DEBUG_SAVEFLOW: guardado fallo no_progress saved={saved} attempts_saved={attempts_to_save}")
+                except Exception as e:
+                    print("ERROR al guardar fallo (no_progress):", e)
+                    status_var.set("Error al guardar fallo")
+            # Mostrar ventana emergente informando y terminar (usar start_btn.after para UI-thread)
+            try:
+                start_btn.after(0, lambda: messagebox.showwarning("Sin runas", "No quedan runas. Se han guardado los datos de fallo. El proceso se detiene."))
+            except Exception:
+                print("Aviso: no se pudo mostrar popup 'Sin runas' (posible entorno no gráfico).")
+            # No continuar con setup: salir del bucle principal
+            break
+
+        # 5) Si éxito: guardar éxito (sin popups) y continuar con siguiente ciclo (setup)
+        if success_flag:
+            print("DEBUG: Éxito PA detectado. Guardando éxito y continuando con siguiente ciclo de setup.")
+            if DataSaver is not None:
+                try:
+                    status_var.set("Guardando éxito...")
+                    saved = DataSaver.finalize_session(
+                        objeto=item_name,
+                        intentos=attempts_to_save,
+                        exito="PA",
+                        tiempo_medio_intento=time_per_attempt,
+                        modo_encadenado_activo=True,
+                        precio_objeto_base=None,
+                        precio_venta_objeto_final=None,
+                        tipo_exo="PA",
+                        kamas_iniciales_arg=None
+                    )
+                    print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved} attempts_saved={attempts_to_save}")
+                except Exception as e:
+                    print("ERROR al guardar éxito:", e)
+                    status_var.set("Error al guardar éxito")
+            # No mostrar ventanas; continuar a la siguiente iteración (nuevo setup)
+            if control_events.stop_event.is_set():
+                print("Stop solicitado tras éxito: saliendo.")
+                break
+            # pequeña espera antes de reiniciar
+            time.sleep(0.5)
+            continue
+
+        # 6) Otros casos (error distinto o simple fallo): guardar como fallo pero continuar el bucle
+        print("DEBUG: Resultado intermedio/no-exito sin 'no_progress'. Guardando como fallo y continuando.")
         if DataSaver is not None:
             try:
-                attempts_to_save = max(shared_state.get("exo_attempts", 0), attempts_result or 0, 1)
-                exito_flag = "PA" if success_flag else 0
-                status_var.set("Guardando en Excel...")
+                status_var.set("Guardando fallo...")
                 saved = DataSaver.finalize_session(
                     objeto=item_name,
                     intentos=attempts_to_save,
-                    exito=exito_flag,
+                    exito=0,
                     tiempo_medio_intento=time_per_attempt,
                     modo_encadenado_activo=True,
                     precio_objeto_base=None,
                     precio_venta_objeto_final=None,
-                    tipo_exo="PA" if success_flag else None,
+                    tipo_exo=None,
                     kamas_iniciales_arg=None
                 )
-                # No mostrar pop-ups en caso de éxito; solo actualizar estado/log
-                if saved in (0, True):
-                    status_var.set("Guardado completado. Reiniciando ciclo...")
-                else:
-                    status_var.set("Guardado fallido. Reiniciando ciclo...")
-                print(f"DEBUG_SAVEFLOW: ciclo guardado. success={success_flag} attempts_saved={attempts_to_save} saved={saved}")
+                print(f"DEBUG_SAVEFLOW: guardado fallback saved={saved} attempts_saved={attempts_to_save}")
             except Exception as e:
-                print("ERROR al guardar desde Main:", e)
+                print("ERROR al guardar fallback:", e)
                 status_var.set("Error al guardar")
         else:
             status_var.set("DataSaver no disponible - no guardado.")
-            print("INFO: DataSaver no disponible, no se guardó esta iteración.")
 
         # Si stop fue solicitado durante la ejecución de mage_main o guardado, salir del bucle
         if control_events.stop_event.is_set():
