@@ -1,4 +1,5 @@
 import time
+import math
 import pyautogui
 
 from Mage_Data_Extractor import capture_and_read_stats
@@ -14,13 +15,13 @@ REGION = (X1, Y1, X2 - X1, Y2 - Y1)  # (x, y, width, height)
 
 # acelerar interacción
 pyautogui.FAILSAFE = False
-pyautogui.PAUSE = 0.03
+pyautogui.PAUSE = 0.02  # acelerado ligeramente
 
 def ensure_ui_active():
     # presionar Alt brevemente para "desatascar" la UI
     try:
         pyautogui.press('alt')
-        time.sleep(0.06)
+        time.sleep(0.04)
     except Exception:
         pass
 
@@ -38,9 +39,9 @@ def stats_within_limits(stats_actuales, stats_min, stats_max):
     return True
 
 # --- Nuevas helpers: reintentos y normalización de lecturas ---
-def capture_with_retries(attempts=3, wait_between=0.4):
+def capture_with_retries(attempts=3, wait_between=0.25):
     """
-    Usa capture_and_read_stats() y reintenta si la lectura parece vacía o inestable.
+    Reintentos rápidos de OCR. Acepta la primera lectura con contenido razonable.
     Devuelve (valores, texto).
     """
     last_vals, last_text = [], ""
@@ -50,17 +51,16 @@ def capture_with_retries(attempts=3, wait_between=0.4):
         elapsed = time.time() - start
         suma = sum(valores) if valores else 0
         nonzeros = sum(1 for v in (valores or []) if v != 0)
-        print(f"Tiempo transcurrido en captura y OCR: {elapsed:.2f}s (intento {attempt}) - suma={suma} nonzeros={nonzeros}")
-        # si hay al menos un número y no es todo cero, aceptamos
+        print(f"Tiempo captura OCR: {elapsed:.2f}s (intento {attempt}) - suma={suma} nonzeros={nonzeros}")
+        # Si hay al menos un valor no cero lo aceptamos inmediatamente
         if suma > 0 and nonzeros > 0:
             return valores, texto
-        # guardamos última lectura por si no hay mejoría
         last_vals, last_text = valores, texto
         if attempt < attempts:
-            print("Lectura dudosa (ceros/ruido). Reintentando captura OCR...")
-            time.sleep(wait_between)
+            # reintento rápido, intentando "desatascar" UI
             ensure_ui_active()
-    # devolver la última lectura aunque sea cero
+            time.sleep(wait_between)
+    # devolver la última lectura incluso si es 0 (fallback)
     return last_vals, last_text
 
 def sanitize_and_align(valores_actuales, target_len):
@@ -113,10 +113,74 @@ def _wait_handle_control(control_events):
             time.sleep(0.15)
     return True
 
+# ----------------------------------------------------------------------
+# Optimización: aplicar runas priorizando stats muy bajas (<30% del min)
+# ----------------------------------------------------------------------
+def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=None,
+                          control_events=None, pre_clicks=3):
+    """
+    Estrategia:
+     - Primero, por cada stat con current < 0.3 * min, hacer hasta pre_clicks invocaciones focalizadas
+       (con temp_min que hace sólo esa stat "clicable") para intentar subirla rápidamente.
+     - Luego invocar una pasada normal para distribuir clicks restantes.
+    Esto intenta minimizar lecturas repetidas y forzar clicks múltiples por stat si procede.
+    """
+    try:
+        n = min(len(stats_min), max(1, len(stats_actuales)))
+    except Exception:
+        n = len(stats_actuales)
+
+    threshold_factor = 0.3
+    # lista de índices a priorizar (current < 0.3 * min)
+    priority_idxs = []
+    for idx in range(n):
+        try:
+            min_val = float(stats_min[idx]) if idx < len(stats_min) else 0
+        except Exception:
+            min_val = 0
+        current = stats_actuales[idx] if idx < len(stats_actuales) else 0
+        if min_val > 0 and current < (threshold_factor * min_val):
+            priority_idxs.append(idx)
+
+    if priority_idxs:
+        # Hacer bloques focalizados por índice
+        for idx in priority_idxs:
+            # si stop/pause durante la operación, salir temprano
+            if control_events and not _wait_handle_control(control_events):
+                return
+            # crear temp_min de tamaño n para focalizar clicks en idx
+            temp_min = [10**9] * n
+            # objetivo: llevar a >= 0.3*min -> usando int para compatibilidad con la lógica existente
+            try:
+                target = max(1, int(math.ceil(stats_min[idx] * threshold_factor)))
+            except Exception:
+                target = 1
+            temp_min[idx] = target
+            # realizar varias invocaciones para subir esa stat varias veces si hace falta
+            for _ in range(pre_clicks):
+                try:
+                    mage_introduce_runes(stats_actuales, temp_min, stats_obj or [], stats_max or [])
+                except Exception as e:
+                    print("WARNING: error en apply_runes_optimized focal:", e)
+                # pequeña pausa sin recapturar para ahorrar tiempo
+                time.sleep(0.08)
+
+    # finalmente, una pasada general para ajustar otras stats
+    try:
+        if control_events and not _wait_handle_control(control_events):
+            return
+        mage_introduce_runes(stats_actuales, stats_min, stats_obj or [], stats_max or [])
+    except Exception as e:
+        print("WARNING: error en apply_runes_optimized final pass:", e)
+
+# ----------------------------------------------------------------------
+# mage_main principal (modificado): intentos y tiempo por intento desde EXO only
+# ----------------------------------------------------------------------
 def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=6):
     """
-    Bucle principal del magueo. Ya no guarda datos: devuelve un dict resumen.
-    control_events: dict con 'pause_event' y 'stop_event' (ambos threading.Event).
+    Bucle principal del magueo. RESPONSABILIDAD:
+      - No contar 'intentos' por runas; contar intentos únicamente cuando se introduce EXO (Mage_Introduce_Exo).
+      - Calcular tiempo medio por intento usando el contador de EXO expuesto en Main.shared_state (si disponible).
     """
     print(f"Starting mage loop for item: {item_name}")
     ensure_ui_active()
@@ -127,7 +191,6 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
     except Exception:
         pass
 
-    iterations = 0
     no_progress_count = 0
     prev_stats = None
     target_len = len(item_stats["min"])
@@ -135,128 +198,135 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
 
     try:
         while True:
-            # control check (pause/stop)
+            # control (pausa/stop)
             if not _wait_handle_control(control_events):
-                return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+                # calcular elapsed y attempts desde shared_state si es posible
+                elapsed = time.time() - start_time
+                attempts_exo = 0
+                try:
+                    import Main as MainModule
+                    attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+                except Exception:
+                    attempts_exo = 0
+                time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+                return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
 
-            # extraer stats actuales con reintentos y normalizar a la longitud de stats_min
-            stats_actuales, _ = capture_with_retries(attempts=3, wait_between=0.2)
+            # captura de stats
+            stats_actuales, _ = capture_with_retries(attempts=3, wait_between=0.25)
             stats_actuales = sanitize_and_align(stats_actuales, target_len)
 
-            if not stats_actuales or len(stats_actuales) == 0:
-                print("No se han detectado stats (OCR vacío) incluso tras reintentos. Reintentando tras breve espera.")
-                time.sleep(0.2)
+            if not stats_actuales:
+                print("OCR vacío tras reintentos. Reintentando...")
+                time.sleep(0.12)
                 ensure_ui_active()
                 continue
 
             print("Current stats:", stats_actuales)
 
-            # si ya están dentro -> exo
+            # Si ya cumplen mínimos -> intentar exo
             if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
-                print("Stats within limits -> introducing exo.")
-                # control check antes de acciones de UI
+                print("Stats dentro de mínimos -> introducir exo.")
                 if not _wait_handle_control(control_events):
-                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+                    elapsed = time.time() - start_time
+                    attempts_exo = 0
+                    try:
+                        import Main as MainModule
+                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+                    except Exception:
+                        attempts_exo = 0
+                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+                    return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
+
+                # introducir EXO (la función introducir_exo debe incrementar el contador global en Main.shared_state)
                 introducir_exo()
-                time.sleep(0.25)  # pequeño tiempo para que la UI procese
-                print("Verifying exo...")
+                time.sleep(0.18)  # dar tiempo al juego
+                print("Verificando exo...")
                 if verify_success():
                     elapsed = time.time() - start_time
-                    time_per_attempt = elapsed / max(1, iterations)
+                    # obtener intentos a partir del contador global
+                    attempts_exo = 0
+                    try:
+                        import Main as MainModule
+                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+                    except Exception:
+                        attempts_exo = 0
+                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception:
                         pass
-                    return {"success": True, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": None}
+                    return {"success": True, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": None}
                 else:
-                    print("Exo failed. Continuing loop.")
-                    time.sleep(0.2)
+                    print("EXO falló. Continuando con runas si procede.")
+                    # NO incrementar contador aquí; se incrementa solo en introducir_exo
+                    # Esperar y continuar (no forzar incremento)
+                    time.sleep(0.18)
                     ensure_ui_active()
-                    iterations += 1
-                    print(f"Iteration {iterations} -> stats: {stats_actuales}")
-                    if iterations % 10 == 0:
-                        try:
-                            Correo.send_mail(item_name, "10 intentos exo PA")
-                        except Exception:
-                            pass
+                    # continuar bucle sin modificar counters
                     continue
 
-            # aplicar runas hasta dentro de min
-            print("Applying runes until stats >= min...")
+            # aplicar runas optimizadas (priorizar <30% min y reducir lecturas)
+            print("Aplicando runas (optimizadas)...")
             prev_stats = normalize_prev(prev_stats, target_len)
-            while not stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
-                if not _wait_handle_control(control_events):
-                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+            apply_runes_optimized(stats_actuales, item_stats["min"], item_stats.get("obj", []), item_stats.get("max", []), control_events=control_events, pre_clicks=3)
 
-                if max_iterations is not None and iterations >= max_iterations:
-                    elapsed = time.time() - start_time
-                    try:
-                        Correo.send_mail(item_name, "10 intentos")
-                    except Exception:
-                        pass
-                    return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": "max_iterations_reached"}
-
-                ensure_ui_active()
+            # tras aplicar runas, hacemos UNA lectura para comprobar progreso
+            if not _wait_handle_control(control_events):
+                elapsed = time.time() - start_time
+                attempts_exo = 0
                 try:
-                    mage_introduce_runes(
-                        stats_actuales=stats_actuales,
-                        stats_min=item_stats["min"],
-                        stats_obj=item_stats.get("obj", []),
-                        stats_max=item_stats.get("max", [])
-                    )
-                except Exception as e:
-                    print("ERROR en mage_introduce_runes:", repr(e))
-                    time.sleep(0.2)
-                    ensure_ui_active()
-                    continue
-
-                time.sleep(0.12)
-                # control check antes de nueva lectura
-                if not _wait_handle_control(control_events):
-                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
-
-                stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
-                stats_actuales = sanitize_and_align(stats_actuales, target_len)
-
-                if not stats_actuales:
-                    print("OCR returned vacío tras introducir runas, reintentando lectura...")
-                    time.sleep(0.2)
-                    ensure_ui_active()
-                    stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
-                    stats_actuales = sanitize_and_align(stats_actuales, target_len)
-
-                iterations += 1
-                print(f"Iteration {iterations} -> stats: {stats_actuales}")
-                if iterations % 10 == 0:
-                    try:
-                        Correo.send_mail(item_name, "10 intentos exo PA")
-                    except Exception:
-                        pass
-
-                if prev_stats is not None and stats_actuales == prev_stats:
-                    no_progress_count += 1
-                    print(f"No progress ({no_progress_count}/{no_progress_limit})")
-                    if no_progress_count >= no_progress_limit:
-                        elapsed = time.time() - start_time
-                        try:
-                            Correo.send_mail(item_name, "Sin runas")
-                        except Exception:
-                            pass
-                        return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": "no_progress"}
-                else:
-                    no_progress_count = 0
-
-                prev_stats = list(stats_actuales)
+                    import Main as MainModule
+                    attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+                except Exception:
+                    attempts_exo = 0
+                time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+                return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
 
             time.sleep(0.12)
+            stats_nuevos, _ = capture_with_retries(attempts=2, wait_between=0.18)
+            stats_nuevos = sanitize_and_align(stats_nuevos, target_len)
+
+            print(f"Post-runas stats: {stats_nuevos}")
+
+            # detección de no progreso
+            if prev_stats is not None and stats_nuevos == prev_stats:
+                no_progress_count += 1
+                print(f"No progress ({no_progress_count}/{no_progress_limit})")
+                if no_progress_count >= no_progress_limit:
+                    elapsed = time.time() - start_time
+                    attempts_exo = 0
+                    try:
+                        import Main as MainModule
+                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+                    except Exception:
+                        attempts_exo = 0
+                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+                    try:
+                        Correo.send_mail(item_name, "Sin runas")
+                    except Exception:
+                        pass
+                    return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "no_progress"}
+            else:
+                no_progress_count = 0
+
+            prev_stats = list(stats_nuevos)
+            # breve espera antes de la siguiente iteración
+            time.sleep(0.08)
             continue
+
     except Exception as e:
         elapsed = time.time() - start_time
+        attempts_exo = 0
+        try:
+            import Main as MainModule
+            attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+        except Exception:
+            attempts_exo = 0
         try:
             Correo.send_mail(item_name, "Finalizar forzado")
         except Exception:
             pass
-        return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": repr(e)}
+        return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": (elapsed / attempts_exo) if attempts_exo > 0 else None, "error": repr(e)}
 
 if __name__ == "__main__":
     # Example usage: ask for item name and load stats from Setup_Item_Stats_Database
