@@ -1,323 +1,156 @@
+import threading
 import time
-import sys
-from pathlib import Path
+import tkinter as tk
+from tkinter import messagebox
 
-# Asegurar imports locales
-root = Path(__file__).parent
-if str(root) not in sys.path:
-    sys.path.insert(0, str(root))
-# permitir buscar un nivel arriba también
-parent = str(root.parent)
-if parent not in sys.path:
-    sys.path.insert(0, parent)
-
-import pyautogui
-from Mage_Data_Extractor import capture_and_read_stats
-from Mage_Introduce_Runes import mage_introduce_runes
-from Mage_Introduce_Exo import introducir_exo
-from Mage_Exo_Verify import verify_success
-import Extra_Correo as Correo
-from Extra_get_kamas import get_kamas
-from Extra_Database import agregar_datos
-import Setup_Item_Stats_Database
-
-# acelerar interacción
-pyautogui.FAILSAFE = False
-pyautogui.PAUSE = 0.03
-
-def ensure_ui_active():
+# Importar módulos locales
+try:
+    import Main_Setup
+    from Mage_Main import mage_main
+    import Main_Save_Data as DataSaver
+except Exception as e:
+    # si hay problemas de path, intentar ajustar
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent))
+    import Main_Setup
+    from Mage_Main import mage_main
     try:
-        pyautogui.press('alt')
-        time.sleep(0.06)
+        import Main_Save_Data as DataSaver
     except Exception:
-        pass
+        DataSaver = None
+        print("WARNING: Main_Save_Data no importable:", e)
 
-def stats_within_limits(stats_actuales, stats_min, stats_max):
-    n = len(stats_min)
-    for i in range(n):
-        actual = stats_actuales[i] if i < len(stats_actuales) else 0
-        if actual < stats_min[i]:
-            return False
-    return True
+# Control events para pausar / detener
+class ControlEvents:
+    def __init__(self):
+        import threading
+        self.pause_event = threading.Event()  # set = running, clear = paused
+        self.stop_event = threading.Event()
 
-def capture_with_retries(attempts=3, wait_between=0.4):
-    last_vals, last_text = [], ""
-    for attempt in range(1, attempts + 1):
-        start = time.time()
-        valores, texto = capture_and_read_stats()
-        elapsed = time.time() - start
-        suma = sum(valores) if valores else 0
-        nonzeros = sum(1 for v in (valores or []) if v != 0)
-        print(f"Tiempo transcurrido en captura y OCR: {elapsed:.2f}s (intento {attempt}) - suma={suma} nonzeros={nonzeros}")
-        if suma > 0 and nonzeros > 0:
-            return valores, texto
-        last_vals, last_text = valores, texto
-        if attempt < attempts:
-            print("Lectura dudosa (ceros/ruido). Reintentando captura OCR...")
-            time.sleep(wait_between)
-            ensure_ui_active()
-    return last_vals, last_text
-
-def sanitize_and_align(valores_actuales, target_len):
-    if not valores_actuales:
-        valores_actuales = []
-    if len(valores_actuales) >= 2 and valores_actuales[0] == 0 and valores_actuales[1] > 0:
-        print("Saneando lectura inicial: descartando primera fila (0) ya que la segunda tiene valor.")
-        valores_actuales = valores_actuales[1:]
-    if len(valores_actuales) < target_len:
-        valores_actuales = valores_actuales + [0] * (target_len - len(valores_actuales))
-    elif len(valores_actuales) > target_len:
-        valores_actuales = valores_actuales[:target_len]
-    return valores_actuales
-
-def normalize_prev(prev, target_len):
-    if prev is None:
-        return None
-    p = list(prev)
-    if len(p) < target_len:
-        p = p + [0] * (target_len - len(p))
-    elif len(p) > target_len:
-        p = p[:target_len]
-    return p
-
-def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
-    print(f"Starting mage loop for item: {item_name}")
-    ensure_ui_active()
-
-    try:
-        Correo.send_mail(item_name, "inicio magueo")
-    except Exception as e:
-        print("Aviso: no se pudo enviar correo de inicio:", e)
-
-    iterations = 0
-    no_progress_count = 0
-    prev_stats = None
-    target_len = len(item_stats["min"])
-    start_time = time.time()
-
-    try:
-        while True:
-            stats_actuales, _ = capture_with_retries(attempts=3, wait_between=0.2)
-            stats_actuales = sanitize_and_align(stats_actuales, target_len)
-
-            if not stats_actuales or len(stats_actuales) == 0:
-                print("No se han detectado stats (OCR vacío) incluso tras reintentos. Reintentando tras breve espera.")
-                time.sleep(0.2)
-                ensure_ui_active()
-                continue
-
-            print("Current stats:", stats_actuales)
-
-            if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
-                print("Stats within limits -> introducing exo.")
-                introducir_exo()
-                time.sleep(0.25)
-                print("Verifying exo...")
-                if verify_success():
-                    elapsed = time.time() - start_time
-                    time_per_attempt = elapsed / max(1, iterations)
-                    print("Exo successful. Finished.")
-                    try:
-                        Correo.send_mail(item_name, "Exito PA")
-                    except Exception as e:
-                        print("Aviso: no se pudo enviar correo de éxito:", e)
-                    return {
-                        "success": True,
-                        "attempts": iterations,
-                        "elapsed": elapsed,
-                        "time_per_attempt": time_per_attempt,
-                        "error": None
-                    }
-                else:
-                    print("Exo failed. Continuing loop.")
-                    time.sleep(0.2)
-                    ensure_ui_active()
-                    iterations += 1
-                    print(f"Iteration {iterations} -> stats: {stats_actuales}")
-                    if iterations % 10 == 0:
-                        try:
-                            Correo.send_mail(item_name, "10 intentos exo PA")
-                        except Exception as e:
-                            print("Aviso: no se pudo enviar correo de 10 intentos exo PA:", e)
-                    continue
-
-            print("Applying runes until stats >= min...")
-            prev_stats = normalize_prev(prev_stats, target_len)
-            while not stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
-                if max_iterations is not None and iterations >= max_iterations:
-                    elapsed = time.time() - start_time
-                    try:
-                        Correo.send_mail(item_name, "10 intentos")
-                    except Exception:
-                        pass
-                    return {
-                        "success": False,
-                        "attempts": iterations,
-                        "elapsed": elapsed,
-                        "time_per_attempt": elapsed / max(1, iterations),
-                        "error": "max_iterations_reached"
-                    }
-
-                ensure_ui_active()
-                try:
-                    mage_introduce_runes(
-                        stats_actuales=stats_actuales,
-                        stats_min=item_stats["min"],
-                        stats_obj=item_stats["obj"],
-                        stats_max=item_stats["max"]
-                    )
-                except Exception as e:
-                    print("ERROR en mage_introduce_runes:", repr(e))
-                    time.sleep(0.2)
-                    ensure_ui_active()
-                    continue
-
-                time.sleep(0.12)
-                stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
-                stats_actuales = sanitize_and_align(stats_actuales, target_len)
-
-                if not stats_actuales:
-                    print("OCR returned vacío tras introducir runas, reintentando lectura...")
-                    time.sleep(0.2)
-                    ensure_ui_active()
-                    stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
-                    stats_actuales = sanitize_and_align(stats_actuales, target_len)
-
-                iterations += 1
-                print(f"Iteration {iterations} -> stats: {stats_actuales}")
-                if iterations % 10 == 0:
-                    try:
-                        Correo.send_mail(item_name, "10 intentos exo PA")
-                    except Exception as e:
-                        print("Aviso: no se pudo enviar correo de 10 intentos exo PA:", e)
-
-                if prev_stats is not None and stats_actuales == prev_stats:
-                    no_progress_count += 1
-                    print(f"No progress ({no_progress_count}/{no_progress_limit})")
-                    if no_progress_count >= no_progress_limit:
-                        elapsed = time.time() - start_time
-                        print("No progress after several iterations. Aborting to avoid infinite loop.")
-                        try:
-                            Correo.send_mail(item_name, "Sin runas")
-                        except Exception as e:
-                            print("Aviso: no se pudo enviar correo 'Sin runas':", e)
-                        return {
-                            "success": False,
-                            "attempts": iterations,
-                            "elapsed": elapsed,
-                            "time_per_attempt": elapsed / max(1, iterations),
-                            "error": "no_progress"
-                        }
-                else:
-                    no_progress_count = 0
-
-                prev_stats = list(stats_actuales)
-
-            time.sleep(0.12)
-            continue
-    except Exception as e:
-        elapsed = time.time() - start_time
-        print("ERROR crítico en mage_main:", repr(e))
-        try:
-            Correo.send_mail(item_name, "Finalizar forzado")
-        except Exception:
-            pass
-        return {
-            "success": False,
-            "attempts": iterations,
-            "elapsed": elapsed,
-            "time_per_attempt": elapsed / max(1, iterations),
-            "error": repr(e)
-        }
-
-# ----------------- CAMBIO: nueva fase de SETUP y main reestructurado -----------------
-def setup_phase():
+def run_process(control_events, status_var, start_btn, stop_btn):
     """
-    Fase de setup: obtener el nombre del objeto automáticamente desde Setup_Item_Stats_Database
-    y leer kamas iniciales. No pide input al usuario.
-    Devuelve (item_name, item_stats, kamas_iniciales) o (None, None, None) si no se obtiene el nombre.
+    Orquesta: Main_Setup -> Mage_Main -> guardar con Main_Save_Data.finalize_session
     """
-    # Intentar varias funciones posibles que el módulo de setup podría exponer
-    candidates = [
-        "get_selected_item_name",
-        "get_current_item_name",
-        "detect_item_name",
-        "get_item_from_ui",
-        "auto_get_item_name",
-        "get_item_name",
-        "get_item",
-        "get_item_stats_by_screen"
-    ]
-    item_name = None
-    for fn_name in candidates:
-        fn = getattr(Setup_Item_Stats_Database, fn_name, None)
-        if callable(fn):
+    start_btn.config(state="disabled")
+    stop_btn.config(state="normal")
+    status_var.set("Preparando Setup...")
+    try:
+        # 1) Setup: obtener item_name y stats
+        status_var.set("Ejecutando Setup...")
+        item_info = Main_Setup.main()
+        # Main_Setup.main debe devolver (item_name, item_stats) o item_stats si no
+        if isinstance(item_info, tuple) and len(item_info) >= 2:
+            item_name, item_stats = item_info[0], item_info[1]
+        else:
+            # compat: si solo devuelve stats, pedir nombre en fallback
+            item_stats = item_info
+            item_name = getattr(item_stats, "get", lambda k, d=None: d)("name", "Item_NoName")
+
+        # 2) Guardar kamas iniciales (opcional) usando Main_Save_Data.save_initial_kamas
+        initial_kamas = None
+        if DataSaver is not None:
             try:
-                item_name = fn()
-                if item_name:
-                    print(f"SETUP: nombre de objeto detectado por '{fn_name}': {item_name}")
-                    break
+                status_var.set("Guardando kamas iniciales...")
+                initial_kamas = DataSaver.save_initial_kamas(item_name)
             except Exception as e:
-                print(f"SETUP: la función '{fn_name}' falló: {e}")
+                print("WARNING: save_initial_kamas falló:", e)
+        else:
+            print("INFO: DataSaver no disponible, no se guardarán kamas iniciales automáticamente.")
 
-    if not item_name:
-        print("ERROR_SETUP: No se pudo obtener el nombre del objeto automáticamente desde Setup_Item_Stats_Database. Abortando setup.")
-        return None, None, None
+        # 3) Llamar a mage_main (pasa control_events para pausar/parar)
+        status_var.set("Ejecutando Mage_Main...")
+        result = mage_main(item_name, item_stats, control_events=vars(control_events))
+        status_var.set("Mage finalizado, guardando...")
+        # result expected dict with keys: success, attempts, elapsed, time_per_attempt, error
+        success_flag = result.get("success", False) if isinstance(result, dict) else False
+        attempts = result.get("attempts", 0) if isinstance(result, dict) else 0
+        time_per_attempt = result.get("time_per_attempt", None) if isinstance(result, dict) else None
 
-    item_stats = Setup_Item_Stats_Database.get_item_stats(item_name)
-    if not item_stats:
-        print(f"Item '{item_name}' no encontrado en la base de datos. Abortando setup.")
-        return None, None, None
+        # 4) Guardado final (Aux_Guardar_Exito): usar Main_Save_Data.finalize_session
+        if DataSaver is not None:
+            try:
+                exito_flag = "PA" if success_flag else 0
+                status_var.set("Guardando en Excel...")
+                saved = DataSaver.finalize_session(
+                    objeto=item_name,
+                    intentos=attempts or 1,
+                    exito=exito_flag,
+                    tiempo_medio_intento=time_per_attempt,
+                    modo_encadenado_activo=True,
+                    precio_objeto_base=None,
+                    precio_venta_objeto_final=None,
+                    tipo_exo="PA" if success_flag else None,
+                    kamas_iniciales_arg=None
+                )
+                status_var.set("Guardado completado." if saved == 0 or saved is True else "Guardado fallido.")
+            except Exception as e:
+                print("ERROR al guardar desde Main:", e)
+                status_var.set("Error al guardar")
+        else:
+            status_var.set("DataSaver no disponible - no guardado.")
 
-    print("Leyendo kamas iniciales (setup)...")
-    try:
-        kamas_iniciales = get_kamas()
+        message = f"Proceso finalizado. Éxito: {success_flag}, intentos: {attempts}, error: {result.get('error') if isinstance(result, dict) else 'N/A'}"
+        messagebox.showinfo("Resultado", message)
     except Exception as e:
-        print("Error leyendo kamas iniciales en setup:", e)
-        kamas_iniciales = 0
+        print("ERROR en run_process:", e)
+        messagebox.showerror("Error", f"Error en proceso: {e}")
+    finally:
+        status_var.set("Idle")
+        start_btn.config(state="normal")
+        stop_btn.config(state="disabled")
+        # Reset stop event for next run
+        control_events.stop_event.clear()
+        control_events.pause_event.set()
 
-    return item_name, item_stats, kamas_iniciales
+def build_ui():
+    root = tk.Tk()
+    root.title("Forjamagia - Control")
+    root.geometry("400x180")
 
-def main():
-    # Primera: SETUP
-    item_name, item_stats, kamas_iniciales = setup_phase()
-    if not item_name or not item_stats:
-        print("Setup no completado. Saliendo.")
-        return
+    status_var = tk.StringVar(value="Idle")
+    lbl = tk.Label(root, textvariable=status_var, font=("Segoe UI", 12))
+    lbl.pack(pady=10)
 
-    # Segunda: MAGE (ejecutar el bucle principal con los datos del setup)
-    start_time = time.time()
-    result = mage_main(item_name, item_stats, max_iterations=None)
-    elapsed_total = time.time() - start_time
+    btn_frame = tk.Frame(root)
+    btn_frame.pack(pady=10)
 
-    # Lectura kamas final y guardado en BD
-    print("Leyendo kamas finales...")
-    try:
-        kamas_finales = get_kamas()
-    except Exception as e:
-        print("Error leyendo kamas finales:", e)
-        kamas_finales = 0
+    control_events = ControlEvents()
+    control_events.pause_event.set()  # empezar en estado running
 
-    attempts = result.get("attempts", 0) if isinstance(result, dict) else 0
-    time_per_attempt = result.get("time_per_attempt", 0) if isinstance(result, dict) else (elapsed_total / max(1, attempts))
-    success_flag = result.get("success", False) if isinstance(result, dict) else False
-    exito_str = "Success" if success_flag else "Fail"
+    start_btn = tk.Button(btn_frame, text="Iniciar", width=12,
+                          command=lambda: threading.Thread(target=run_process, args=(control_events, status_var, start_btn, stop_btn), daemon=True).start())
+    start_btn.grid(row=0, column=0, padx=10)
 
-    print(f"Resumen: item={item_name}, attempts={attempts}, exito={exito_str}, kamas_iniciales={kamas_iniciales}, kamas_finales={kamas_finales}")
+    def stop_clicked():
+        # señal de parada: Mage_Main debe leer stop_event y terminar
+        control_events.stop_event.set()
+        control_events.pause_event.set()  # levantar pausa si estaba pausado para permitir salida
+        status_var.set("Parando y guardando...")
 
-    # Guardar en la base de datos Excel
-    try:
-        agregar_datos(
-            objeto_seleccionado=item_name,
-            intentos=attempts,
-            kamas_iniciales=kamas_iniciales,
-            kamas_finales=kamas_finales,
-            exito=exito_str,
-            tiempo_medio_intento=time_per_attempt,
-            modo_encadenado_activo=False
-        )
-    except Exception as e:
-        print("Error guardando datos en la base de datos:", e)
+    stop_btn = tk.Button(btn_frame, text="Parar (guardar)", width=12, command=stop_clicked, state="disabled")
+    stop_btn.grid(row=0, column=1, padx=10)
+
+    # Pausar/Resumir con F9
+    def toggle_pause(event=None):
+        if control_events.pause_event.is_set():
+            control_events.pause_event.clear()
+            status_var.set("Pausado")
+        else:
+            control_events.pause_event.set()
+            status_var.set("Reanudando...")
+
+    # Parar y guardar con F10
+    def f10_stop(event=None):
+        stop_clicked()
+
+    root.bind('<F9>', toggle_pause)
+    root.bind('<F10>', f10_stop)
+
+    tip = tk.Label(root, text="Atajos: F9 Pausa/Resume, F10 Parar y Guardar", font=("Segoe UI", 9))
+    tip.pack(pady=8)
+
+    root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    build_ui()

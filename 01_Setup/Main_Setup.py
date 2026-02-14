@@ -8,7 +8,9 @@ import Setup_Item_Stats_Database
 import Setup_Equipo_Recursos
 
 def main():
-
+    """
+    Ejecuta la fase de setup y devuelve (item_name, item_stats).
+    """
     print("Ejecutando Setup_Equipo_Recursos...")
     Setup_Equipo_Recursos.main("Equipo")  # o "Recursos" según
 
@@ -26,9 +28,8 @@ def main():
     Setup_Equipo_Recursos.main("Equipo")  # o "Recursos" según
     Setup_Ring.main()
 
-    print(Setup_Stats)
-    return Setup_Stats
+    print("Setup completado. Item:", Setup_Item_Name)
+    return Setup_Item_Name, Setup_Stats
 
 if __name__ == "__main__":
     main()
-

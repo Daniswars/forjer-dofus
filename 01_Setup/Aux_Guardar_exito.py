@@ -30,14 +30,11 @@ def perform_dofus_sequence():
 
     # Double click at the second position
     print("Double clicking at X=1490, Y=732...")
-    pyautogui.moveTo(x=1409, y=733)
-    time.sleep(0.2)
+    pyautogui.moveTo(x=2150, y=722)
+    time.sleep(1)
     pyautogui.click(clicks=2, interval=0.1)
-    time.sleep(0.5)
-    pyautogui.moveTo(x=1490, y=732)
-
-    # Press Escape again
-    pyautogui.click(x = 1962, y = 518)
+    time.sleep(1)
+    pyautogui.click(x=2630, y=513)
     time.sleep(2)  # Delay after the click
 
     # Click at X=3813, Y=331 again (replaces 'H' press)

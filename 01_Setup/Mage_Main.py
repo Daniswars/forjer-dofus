@@ -5,7 +5,6 @@ from Mage_Data_Extractor import capture_and_read_stats
 from Mage_Introduce_Runes import mage_introduce_runes
 from Mage_Introduce_Exo import introducir_exo
 from Mage_Exo_Verify import verify_success
-# --- Nuevo: importar módulo de correo (alineado con main.py) ---
 import Extra_Correo as Correo
 
 # Coordenadas del área de lectura: (x1,y1) -> (x2,y2)
@@ -92,53 +91,54 @@ def normalize_prev(prev, target_len):
         p = p[:target_len]
     return p
 
-# --- Nuevo: importar Main_Save_Data de forma robusta ---
-try:
-    import Main_Save_Data as DataSaver
-except Exception:
-    # intentar añadir carpeta padre al path y reintentar
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent))
-    try:
-        import Main_Save_Data as DataSaver
-    except Exception as e:
-        DataSaver = None
-        print("WARNING: no se pudo importar Main_Save_Data, las funciones de guardado no estarán disponibles:", e)
-
-def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
+# Nuevo: control_events es dict opcional con 'pause_event' (Event) y 'stop_event' (Event)
+def _wait_handle_control(control_events):
     """
-    Ahora itera hasta que todas las stats >= stats_min.
-    Devuelve un dict resumen con llaves: success (bool), attempts (int), elapsed (float),
-    time_per_attempt (float), error (str|None).
+    Si se pasa control_events, espera mientras pause_event está clear (pausado).
+    Devuelve False si stop_event se encontró durante la espera -> indicar que se debe abortar.
+    """
+    if not control_events:
+        return True
+    pause_ev = control_events.get('pause_event')
+    stop_ev = control_events.get('stop_event')
+    # Si stop already set -> abort
+    if stop_ev and getattr(stop_ev, "is_set", lambda: False)():
+        return False
+    # Si pause_event existe y no está set -> esperar
+    if pause_ev:
+        while not pause_ev.is_set():
+            # comprobamos stop durante la pausa
+            if stop_ev and stop_ev.is_set():
+                return False
+            time.sleep(0.15)
+    return True
+
+def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=6):
+    """
+    Bucle principal del magueo. Ya no guarda datos: devuelve un dict resumen.
+    control_events: dict con 'pause_event' y 'stop_event' (ambos threading.Event).
     """
     print(f"Starting mage loop for item: {item_name}")
     ensure_ui_active()
 
-    # --- Enviar correo de inicio ---
+    # Notificar inicio (si hay correo configurado)
     try:
         Correo.send_mail(item_name, "inicio magueo")
-    except Exception as e:
-        print("Aviso: no se pudo enviar correo de inicio:", e)
-
-    # --- Nuevo: guardar kamas iniciales usando Main_Save_Data.save_initial_kamas ---
-    initial_kamas_saved = None
-    if DataSaver is not None:
-        try:
-            initial_kamas_saved = DataSaver.save_initial_kamas(item_name)
-            print(f"DEBUG_SAVEFLOW: Kamas iniciales guardadas: {initial_kamas_saved}")
-        except Exception as e:
-            print("WARNING: fallo al guardar kamas iniciales con Main_Save_Data:", e)
-    else:
-        print("WARNING: DataSaver no disponible, no se guardarán kamas iniciales automáticamente.")
+    except Exception:
+        pass
 
     iterations = 0
     no_progress_count = 0
     prev_stats = None
     target_len = len(item_stats["min"])
     start_time = time.time()
+
     try:
         while True:
+            # control check (pause/stop)
+            if not _wait_handle_control(control_events):
+                return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+
             # extraer stats actuales con reintentos y normalizar a la longitud de stats_min
             stats_actuales, _ = capture_with_retries(attempts=3, wait_between=0.2)
             stats_actuales = sanitize_and_align(stats_actuales, target_len)
@@ -154,99 +154,67 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
             # si ya están dentro -> exo
             if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
                 print("Stats within limits -> introducing exo.")
+                # control check antes de acciones de UI
+                if not _wait_handle_control(control_events):
+                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
                 introducir_exo()
                 time.sleep(0.25)  # pequeño tiempo para que la UI procese
                 print("Verifying exo...")
                 if verify_success():
                     elapsed = time.time() - start_time
                     time_per_attempt = elapsed / max(1, iterations)
-                    print("Exo successful. Finished.")
-                    # --- ENVIAR correo de éxito ---
                     try:
                         Correo.send_mail(item_name, "Exito PA")
-                    except Exception as e:
-                        print("Aviso: no se pudo enviar correo de éxito:", e)
-
-                    # --- NUEVO: llamar a Main_Save_Data.finalize_session para guardar éxito ---
-                    if DataSaver is not None:
-                        try:
-                            attempts_to_save = max(1, iterations)
-                            tiempo_promedio_guardar = time_per_attempt
-                            print("DEBUG_SAVEFLOW: Guardando resultado SUCCESS en Excel mediante Main_Save_Data.finalize_session...")
-                            saved = DataSaver.finalize_session(
-                                objeto=item_name,
-                                intentos=attempts_to_save,
-                                exito="PA",
-                                tiempo_medio_intento=tiempo_promedio_guardar,
-                                modo_encadenado_activo=True,
-                                precio_objeto_base=None,
-                                precio_venta_objeto_final=None,
-                                tipo_exo="PA",
-                                kamas_iniciales_arg=None
-                            )
-                            print(f"DEBUG_SAVEFLOW: finalize_session returned: {saved}")
-                        except Exception as e:
-                            print("ERROR: fallo al guardar éxito con Main_Save_Data:", e)
-                    else:
-                        print("WARNING: DataSaver no disponible, no se guardó el resultado en Excel.")
-
-                    return {
-                        "success": True,
-                        "attempts": iterations,
-                        "elapsed": elapsed,
-                        "time_per_attempt": time_per_attempt,
-                        "error": None
-                    }
+                    except Exception:
+                        pass
+                    return {"success": True, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": None}
                 else:
                     print("Exo failed. Continuing loop.")
                     time.sleep(0.2)
                     ensure_ui_active()
                     iterations += 1
                     print(f"Iteration {iterations} -> stats: {stats_actuales}")
-
-                    # --- NUEVO: enviar correo cada 10 intentos indicando que son de exo PA ---
                     if iterations % 10 == 0:
                         try:
                             Correo.send_mail(item_name, "10 intentos exo PA")
-                        except Exception as e:
-                            print("Aviso: no se pudo enviar correo de 10 intentos exo PA:", e)
+                        except Exception:
+                            pass
                     continue
 
-            # si no están dentro, aplicar runas hasta que lo estén (o se alcance seguridad)
+            # aplicar runas hasta dentro de min
             print("Applying runes until stats >= min...")
             prev_stats = normalize_prev(prev_stats, target_len)
             while not stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
+                if not _wait_handle_control(control_events):
+                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+
                 if max_iterations is not None and iterations >= max_iterations:
                     elapsed = time.time() - start_time
-                    print(f"Reached max_iterations ({max_iterations}). Aborting rune loop.")
                     try:
                         Correo.send_mail(item_name, "10 intentos")
-                    except Exception as e:
-                        print("Aviso: no se pudo enviar correo de max_iterations:", e)
-                    return {
-                        "success": False,
-                        "attempts": iterations,
-                        "elapsed": elapsed,
-                        "time_per_attempt": elapsed / max(1, iterations),
-                        "error": "max_iterations_reached"
-                    }
+                    except Exception:
+                        pass
+                    return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": "max_iterations_reached"}
 
                 ensure_ui_active()
                 try:
                     mage_introduce_runes(
                         stats_actuales=stats_actuales,
                         stats_min=item_stats["min"],
-                        stats_obj=item_stats["obj"],
-                        stats_max=item_stats["max"]
+                        stats_obj=item_stats.get("obj", []),
+                        stats_max=item_stats.get("max", [])
                     )
                 except Exception as e:
                     print("ERROR en mage_introduce_runes:", repr(e))
                     time.sleep(0.2)
                     ensure_ui_active()
-                    # continuar el bucle tras error puntual
                     continue
 
                 time.sleep(0.12)
+                # control check antes de nueva lectura
+                if not _wait_handle_control(control_events):
+                    return {"success": False, "attempts": iterations, "elapsed": time.time() - start_time, "time_per_attempt": (time.time() - start_time) / max(1, iterations), "error": "stopped_by_user"}
+
                 stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
                 stats_actuales = sanitize_and_align(stats_actuales, target_len)
 
@@ -257,49 +225,24 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
                     stats_actuales, _ = capture_with_retries(attempts=2, wait_between=0.18)
                     stats_actuales = sanitize_and_align(stats_actuales, target_len)
 
-                # detectar no progreso (comparando listas normalizadas)
+                iterations += 1
+                print(f"Iteration {iterations} -> stats: {stats_actuales}")
+                if iterations % 10 == 0:
+                    try:
+                        Correo.send_mail(item_name, "10 intentos exo PA")
+                    except Exception:
+                        pass
+
                 if prev_stats is not None and stats_actuales == prev_stats:
                     no_progress_count += 1
                     print(f"No progress ({no_progress_count}/{no_progress_limit})")
                     if no_progress_count >= no_progress_limit:
                         elapsed = time.time() - start_time
-                        print("No progress after several iterations. Aborting to avoid infinite loop.")
-                        # --- ENVIAR correo "Sin runas" antes de abortar ---
                         try:
                             Correo.send_mail(item_name, "Sin runas")
-                        except Exception as e:
-                            print("Aviso: no se pudo enviar correo 'Sin runas':", e)
-
-                        # --- NUEVO: guardar como fallo usando Main_Save_Data.finalize_session ---
-                        if DataSaver is not None:
-                            try:
-                                attempts_to_save = max(1, iterations)
-                                tiempo_promedio_guardar = (elapsed / attempts_to_save) if attempts_to_save > 0 else 0.0
-                                print("DEBUG_SAVEFLOW: Guardando resultado FAIL en Excel mediante Main_Save_Data.finalize_session...")
-                                saved = DataSaver.finalize_session(
-                                    objeto=item_name,
-                                    intentos=attempts_to_save,
-                                    exito=0,
-                                    tiempo_medio_intento=tiempo_promedio_guardar,
-                                    modo_encadenado_activo=True,
-                                    precio_objeto_base=None,
-                                    precio_venta_objeto_final=None,
-                                    tipo_exo=None,
-                                    kamas_iniciales_arg=None
-                                )
-                                print(f"DEBUG_SAVEFLOW: finalize_session returned: {saved}")
-                            except Exception as e:
-                                print("ERROR: fallo al guardar fallo con Main_Save_Data:", e)
-                        else:
-                            print("WARNING: DataSaver no disponible, no se guardó el fallo en Excel.")
-
-                        return {
-                            "success": False,
-                            "attempts": iterations,
-                            "elapsed": elapsed,
-                            "time_per_attempt": elapsed / max(1, iterations),
-                            "error": "no_progress"
-                        }
+                        except Exception:
+                            pass
+                        return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": "no_progress"}
                 else:
                     no_progress_count = 0
 
@@ -309,39 +252,11 @@ def mage_main(item_name, item_stats, max_iterations=None, no_progress_limit=6):
             continue
     except Exception as e:
         elapsed = time.time() - start_time
-        print("ERROR crítico en mage_main:", repr(e))
         try:
             Correo.send_mail(item_name, "Finalizar forzado")
-        except Exception as ee:
-            print("Aviso: no se pudo enviar correo tras error crítico:", ee)
-
-        # Intentar guardar como fallo ante error crítico
-        if DataSaver is not None:
-            try:
-                attempts_to_save = max(1, iterations)
-                tiempo_promedio_guardar = (elapsed / attempts_to_save) if attempts_to_save > 0 else 0.0
-                print("DEBUG_SAVEFLOW: Guardando resultado FAIL (error crítico) en Excel mediante Main_Save_Data.finalize_session...")
-                DataSaver.finalize_session(
-                    objeto=item_name,
-                    intentos=attempts_to_save,
-                    exito=0,
-                    tiempo_medio_intento=tiempo_promedio_guardar,
-                    modo_encadenado_activo=True,
-                    precio_objeto_base=None,
-                    precio_venta_objeto_final=None,
-                    tipo_exo=None,
-                    kamas_iniciales_arg=None
-                )
-            except Exception as e2:
-                print("ERROR: fallo al guardar fallo por error crítico con Main_Save_Data:", e2)
-
-        return {
-            "success": False,
-            "attempts": iterations,
-            "elapsed": elapsed,
-            "time_per_attempt": elapsed / max(1, iterations),
-            "error": repr(e)
-        }
+        except Exception:
+            pass
+        return {"success": False, "attempts": iterations, "elapsed": elapsed, "time_per_attempt": elapsed / max(1, iterations), "error": repr(e)}
 
 if __name__ == "__main__":
     # Example usage: ask for item name and load stats from Setup_Item_Stats_Database
