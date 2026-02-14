@@ -333,6 +333,70 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 ensure_ui_active()
                 time.sleep(0.07)
 
+            # --- DOBLE CICLO ESPECÍFICO PARA RESISTENCIAS ---
+            # Hacemos una pasada adicional SOLO para stats de resistencia (runas_re, runas_re_por)
+            # Si tras las rondas siguen por debajo del mínimo y no se supera stats_max, se aplica 1 click extra.
+            resist_indices = []
+            for i in range(n):
+                obj = stats_obj[i] if i < len(stats_obj) else ""
+                if obj and (obj in runas_re or obj in runas_re_por):
+                    # comprobar si sigue por debajo del mínimo y tiene margen para 1 click más
+                    actual = stats_actuales[i]
+                    minimo = stats_min[i]
+                    maximo = stats_max[i] if i < len(stats_max) else 9999
+                    # estimación del incremento por columna según la lógica usada: preferimos col1 (inc=3) para resistencias
+                    inc = 3
+                    # si aplicar inc no superará el máximo y sigue siendo útil (mejora hacia el mínimo) -> añadir
+                    if actual < minimo and (actual + inc) <= maximo:
+                        resist_indices.append(i)
+            if resist_indices:
+                print(f"Doble ciclo resistencias: aplicando click extra en índices: {resist_indices}")
+                for i in resist_indices:
+                    obj = stats_obj[i] if i < len(stats_obj) else ""
+                    actual = stats_actuales[i]
+                    maximo = stats_max[i] if i < len(stats_max) else 9999
+                    # reutilizar la misma selección de columna/X para consistencia
+                    if obj in runas_re_emp:
+                        x = COLUMNAS_X[1]
+                    elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
+                        x = COLUMNAS_X[0]
+                    elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
+                        x = COLUMNAS_X[0]
+                    elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+                        x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+                    elif obj in runas_potencia or obj in runas_sa:
+                        if actual + 10 <= maximo:
+                            x = COLUMNAS_X[2]
+                        elif actual + 3 <= maximo:
+                            x = COLUMNAS_X[1]
+                        else:
+                            x = COLUMNAS_X[0]
+                    elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
+                        if obj in runas_vi:
+                            x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
+                        elif obj in runas_ini:
+                            x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
+                        else:
+                            x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
+                    else:
+                        x = COLUMNAS_X[0]
+                    y = get_fila_y(i)
+                    try:
+                        click(x, y)
+                        did_click_any = True
+                        # actualizar valor local (inc = 3 por defecto para resistencias)
+                        stats_actuales[i] = min(stats_actuales[i] + 3, stats_max[i] if i < len(stats_max) else stats_actuales[i] + 3)
+                        try:
+                            import Main as MainModule
+                            MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        print("ERROR en doble ciclo resistencia click:", e)
+                    time.sleep(0.05)
+                ensure_ui_active()
+                time.sleep(0.08)
+
     # devolvemos True si se hicieron clicks en alguna fase
     return bool(did_click_any)
 
