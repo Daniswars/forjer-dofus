@@ -119,59 +119,100 @@ def _wait_handle_control(control_events):
 def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=None,
                           control_events=None, pre_clicks=3):
     """
-    Estrategia:
-     - Primero, por cada stat con current < 0.3 * min, hacer hasta pre_clicks invocaciones focalizadas
-       (con temp_min que hace sólo esa stat "clicable") para intentar subirla rápidamente.
-     - Luego invocar una pasada normal para distribuir clicks restantes.
-    Esto intenta minimizar lecturas repetidas y forzar clicks múltiples por stat si procede.
+    Construye un plan único de clicks por stat y llama a mage_introduce_runes UNA vez
+    para ejecutar todas las rondas. Esto evita aplicar runas repetidamente y sobrepasar.
     """
+    n = len(stats_min)
+    # seguridad: normalizar listas
+    stats_obj = stats_obj or []
+    stats_max = stats_max or [99999] * n
+    if len(stats_actuales) < n:
+        stats_actuales = stats_actuales + [0] * (n - len(stats_actuales))
+    else:
+        stats_actuales = stats_actuales[:n]
+
+    # parámetros
+    incr_by_col = {0: 1, 1: 3, 2: 10}
+    # obtener max clicks por stat desde Main.shared_state si existe
+    default_max = pre_clicks
     try:
-        n = min(len(stats_min), max(1, len(stats_actuales)))
+        import Main as MainModule
+        default_max = int(MainModule.shared_state.get("max_clicks_per_stat", default_max))
     except Exception:
-        n = len(stats_actuales)
+        pass
 
-    threshold_factor = 0.3
-    # lista de índices a priorizar (current < 0.3 * min)
-    priority_idxs = []
-    for idx in range(n):
-        try:
-            min_val = float(stats_min[idx]) if idx < len(stats_min) else 0
-        except Exception:
-            min_val = 0
-        current = stats_actuales[idx] if idx < len(stats_actuales) else 0
-        if min_val > 0 and current < (threshold_factor * min_val):
-            priority_idxs.append(idx)
+    planned_clicks = [0] * n
+    preferred_col = [1] * n
 
-    if priority_idxs:
-        # Hacer bloques focalizados por índice
-        for idx in priority_idxs:
-            # si stop/pause durante la operación, salir temprano
-            if control_events and not _wait_handle_control(control_events):
-                return
-            # crear temp_min de tamaño n para focalizar clicks en idx
-            temp_min = [10**9] * n
-            # objetivo: llevar a >= 0.3*min -> usando int para compatibilidad con la lógica existente
-            try:
-                target = max(1, int(math.ceil(stats_min[idx] * threshold_factor)))
-            except Exception:
-                target = 1
-            temp_min[idx] = target
-            # realizar varias invocaciones para subir esa stat varias veces si hace falta
-            for _ in range(pre_clicks):
-                try:
-                    mage_introduce_runes(stats_actuales, temp_min, stats_obj or [], stats_max or [])
-                except Exception as e:
-                    print("WARNING: error en apply_runes_optimized focal:", e)
-                # pequeña pausa sin recapturar para ahorrar tiempo
-                time.sleep(0.08)
+    # heurística simple para elegir columna preferida (no cambia durante la iteración)
+    for i in range(n):
+        actual = stats_actuales[i]
+        minimo = stats_min[i]
+        maximo = stats_max[i] if i < len(stats_max) else 99999
+        obj = stats_obj[i] if i < len(stats_obj) else ""
+        name = str(obj).lower() if obj else ""
+        if "vi" in name or "vital" in name:
+            preferred_col[i] = 2 if actual + 30 <= maximo else 1
+        elif "ini" in name:
+            preferred_col[i] = 2 if actual + 100 <= maximo else 1
+        elif "crit" in name or "da" in name:
+            preferred_col[i] = 1
+        elif "sue" in name or "suerte" in name:
+            preferred_col[i] = 0
+        else:
+            preferred_col[i] = 1
 
-    # finalmente, una pasada general para ajustar otras stats
+    # construir plan: clicks necesarios intentando no sobrepasar en exceso
+    for i in range(n):
+        actual = stats_actuales[i]
+        minimo = stats_min[i]
+        if minimo <= 0 or actual >= minimo:
+            planned_clicks[i] = 0
+            continue
+        col = preferred_col[i]
+        inc = incr_by_col.get(col, 1)
+        deficit = minimo - actual
+        # aproximación inicial (ceil)
+        need = (deficit + inc - 1) // inc
+        # evitar overshoot grande: si ceil produce mucha sobre elevación, reducir si posible
+        overshoot = actual + need * inc - minimo
+        # si overshoot > inc/2 y need>1 reducimos uno (intenta menor overshoot)
+        if need > 1 and overshoot > (inc // 2):
+            need -= 1
+        if need < 1:
+            need = 1  # al menos 1 si hay déficit pequeño
+        # limitar por max
+        planned_clicks[i] = min(need, default_max)
+
+    # si no hay clicks planificados, dejar que la función original haga una pasada mínima
+    if not any(planned_clicks):
+        # marcar una pasada mínima para stats por debajo de min
+        for i in range(n):
+            if stats_actuales[i] < stats_min[i]:
+                planned_clicks[i] = 1
+
+    # Validación: si lectura es dudosa, no aplicar
+    suma = sum(stats_actuales)
+    nonzeros = sum(1 for v in stats_actuales if v != 0)
+    min_nonzeros = max(1, n // 6)
+    if suma == 0 or nonzeros < min_nonzeros:
+        print("Lectura dudosa antes de aplicar runas (apply_runes_optimized). Reintentando OCR...")
+        nuevos, _ = capture_with_retries(attempts=2, wait_between=0.16)
+        nuevos = sanitize_and_align(nuevos, n)
+        suma2 = sum(nuevos) if nuevos else 0
+        nonzeros2 = sum(1 for v in (nuevos or []) if v != 0)
+        if suma2 == 0 or nonzeros2 < min_nonzeros:
+            print("Persisten lecturas dudosas: no se aplicarán runas ahora.")
+            return False
+        stats_actuales = nuevos
+
+    # Llamar a mage_introduce_runes UNA vez con el plan
     try:
-        if control_events and not _wait_handle_control(control_events):
-            return
-        mage_introduce_runes(stats_actuales, stats_min, stats_obj or [], stats_max or [])
+        applied = mage_introduce_runes(stats_actuales, stats_min, stats_obj or [], stats_max or [], planned_clicks=planned_clicks)
+        return bool(applied)
     except Exception as e:
-        print("WARNING: error en apply_runes_optimized final pass:", e)
+        print("ERROR al ejecutar mage_introduce_runes con plan:", e)
+        return False
 
 # ----------------------------------------------------------------------
 # mage_main principal (modificado): intentos y tiempo por intento desde EXO only
