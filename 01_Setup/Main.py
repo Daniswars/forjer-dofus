@@ -108,36 +108,10 @@ def install_monkeypatches():
         MIR.mage_introduce_runes = wrapped_mage_introduce_runes
         print("DEBUG: Parche instalado en Mage_Introduce_Runes.mage_introduce_runes")
 
-    # Wrap introducir_exo: contar intento y evitar movimientos "falsos" (temporalmente neutralizar moveTo)
-    if MIE is not None and hasattr(MIE, "introducir_exo"):
-        orig_introducir_exo = MIE.introducir_exo
-        import pyautogui as _pyautogui
-
-        def wrapped_introducir_exo(*args, **kwargs):
-            # incrementar contador de intentos de exo (se cuenta cuando se lanza la acción)
-            shared_state["exo_attempts"] = shared_state.get("exo_attempts", 0) + 1
-            # neutralizar movimientos problemáticos: parchear moveTo temporalmente
-            orig_moveTo = getattr(_pyautogui, "moveTo", None)
-            try:
-                _pyautogui.moveTo = lambda *a, **k: None
-            except Exception:
-                pass
-            try:
-                res = orig_introducir_exo(*args, **kwargs)
-            except Exception as e:
-                print("ERROR en wrapped_introducir_exo:", e)
-                res = None
-            finally:
-                # restaurar moveTo
-                try:
-                    if orig_moveTo is not None:
-                        _pyautogui.moveTo = orig_moveTo
-                except Exception:
-                    pass
-            return res
-
-        MIE.introducir_exo = wrapped_introducir_exo
-        print("DEBUG: Parche instalado en Mage_Introduce_Exo.introducir_exo")
+     # Nota: no parcheamos introducir_exo aquí para evitar doble conteo de intentos.
+    # Contador de EXO se incrementa dentro de Mage_Introduce_Exo.introducir_exo (si puede acceder a Main.shared_state).
+    # MIE.introducir_exo = wrapped_introducir_exo
+    # print("DEBUG: Parche instalado en Mage_Introduce_Exo.introducir_exo")
 
 def run_process(control_events, status_var, start_btn, stop_btn):
     """
@@ -243,7 +217,7 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     status_var.set("Error al guardar fallo")
             # Mostrar ventana emergente informando y terminar (usar start_btn.after para UI-thread)
             try:
-                start_btn.after(0, lambda: messagebox.showwarning("Sin runas", "No quedan runas. Se han guardado los datos de fallo. El proceso se detiene."))
+                start_btn.after(0, lambda: messagebox.askyesno("Sin runas", "No quedan runas. ¿Continuar (guardar fallo) o Detener?"))
             except Exception:
                 print("Aviso: no se pudo mostrar popup 'Sin runas' (posible entorno no gráfico).")
             # No continuar con setup: salir del bucle principal
