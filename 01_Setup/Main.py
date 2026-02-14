@@ -408,6 +408,19 @@ def build_ui():
     root.bind_all('<F9>', lambda e: pause_toggle())
     root.bind_all('<F10>', lambda e: stop_clicked())
 
+    # Intentar registrar hotkeys globales con la librería `keyboard` (mejor para teclados que no envían F9 a la ventana)
+    try:
+        import keyboard  # pip install keyboard (requiere permisos en Windows)
+        try:
+            keyboard.add_hotkey('f9', pause_toggle)
+            keyboard.add_hotkey('f10', stop_clicked)
+            log("Hotkeys globales registrados: F9 (pausa), F10 (parar).")
+        except Exception as e:
+            log(f"Imposible registrar hotkeys globales (keyboard.add_hotkey): {e}")
+    except Exception as e:
+        # Si keyboard no está instalado, seguir con bind_all (funciona cuando la ventana tiene foco)
+        log("Módulo 'keyboard' no disponible: F9/F10 sólo funcionarán con la ventana activa.")
+
     # Manejo de cierre de ventana
     def on_close():
         if worker_thread["thread"] and worker_thread["thread"].is_alive():

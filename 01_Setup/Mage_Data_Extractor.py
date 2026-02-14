@@ -41,18 +41,22 @@ def normalize_number(text):
 def is_noise_line(line):
     return bool(re.search(r'(.)\1{4,}', line))
 
-def preprocess_for_ocr(img, upscale=2):
-    # grayscale
+def preprocess_for_ocr(img, upscale=1.3):
+    """
+    Preprocesado más ligero para acelerar OCR:
+     - grayscale, contraste moderado, ligera nitidez
+     - upscale moderado (1.3) para ayudar a tesseract sin costar tanto
+     - umbral binario rápido
+    """
     img = img.convert("L")
-    # increase contrast
-    img = ImageEnhance.Contrast(img).enhance(1.8)
-    # slight sharpening
-    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
-    # upscale to help tesseract on small fonts
+    img = ImageEnhance.Contrast(img).enhance(1.6)
+    # sharpening leve (menos costoso)
+    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=2))
     if upscale != 1:
-        img = img.resize((img.width * upscale, img.height * upscale), Image.BILINEAR)
-    # simple binary threshold to reduce noise
-    img = img.point(lambda p: 255 if p > 150 else 0)
+        new_w = max(1, int(img.width * upscale))
+        new_h = max(1, int(img.height * upscale))
+        img = img.resize((new_w, new_h), Image.BILINEAR)
+    img = img.point(lambda p: 255 if p > 140 else 0)
     return img
 
 def ocr_stat_image(img, lang='spa', digits_only=True):
@@ -60,16 +64,16 @@ def ocr_stat_image(img, lang='spa', digits_only=True):
     Usa config específica para dígitos cuando sea posible (más rápido y fiable).
     """
     if digits_only:
-        config = '--psm 7 -c tessedit_char_whitelist=0123456789'
+        config = '--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
         try:
             text = pytesseract.image_to_string(img, lang=lang, config=config)
         except Exception:
             text = pytesseract.image_to_string(img, lang='eng', config=config)
     else:
         try:
-            text = pytesseract.image_to_string(img, lang=lang, config='--psm 6')
+            text = pytesseract.image_to_string(img, lang=lang, config='--oem 3 --psm 6')
         except Exception:
-            text = pytesseract.image_to_string(img, lang='eng', config='--psm 6')
+            text = pytesseract.image_to_string(img, lang='eng', config='--oem 3 --psm 6')
     return text
 
 def extract_number_from_text(text):
@@ -91,13 +95,14 @@ def extract_number_from_text(text):
 
 def capture_and_read_stats(save_folder=None, lang='spa'):
     """
-    Optimized: take a single screenshot covering all STAT_COORDS, then crop per stat.
+    Single screenshot + crop per stat. OCR digits-only por defecto,
+    fallback laxo SOLO para filas que quedaron en 0.
     """
     start_time = time.time()
     numbers = []
     raw_texts = []
 
-    # compute bounding box covering all STAT_COORDS
+    # bounding box
     min_x = min(x1 for (x1, y1, x2, y2) in STAT_COORDS)
     min_y = min(y1 for (x1, y1, x2, y2) in STAT_COORDS)
     max_x = max(x2 for (x1, y1, x2, y2) in STAT_COORDS)
@@ -105,50 +110,39 @@ def capture_and_read_stats(save_folder=None, lang='spa'):
     total_w = max_x - min_x
     total_h = max_y - min_y
 
-    # single screenshot of the whole area
     full_img = pyautogui.screenshot(region=(min_x, min_y, total_w, total_h))
     if full_img.mode != "RGB":
         full_img = full_img.convert("RGB")
 
-    # optional save folder
-    if save_folder:
-        os.makedirs(save_folder, exist_ok=True)
-        full_img.save(os.path.join(save_folder, "stats_full.png"))
-
-    for idx, (x1, y1, x2, y2) in enumerate(STAT_COORDS):
-        # crop relative to full_img
+    # process each stat crop (faster)
+    crops = []
+    for (x1, y1, x2, y2) in STAT_COORDS:
         rel_box = (x1 - min_x, y1 - min_y, x2 - min_x, y2 - min_y)
-        crop = full_img.crop(rel_box)
+        crops.append(full_img.crop(rel_box))
 
-        # faster preprocessing tuned for digits
-        proc = preprocess_for_ocr(crop, upscale=2)
-
-        if save_folder:
-            proc.save(os.path.join(save_folder, f"stat_{idx+1}_proc.png"))
-
-        # try digits-only OCR first (psm7 + whitelist)
+    # first pass: digits-only OCR
+    for crop in crops:
+        proc = preprocess_for_ocr(crop, upscale=1.3)
         text = ocr_stat_image(proc, lang=lang, digits_only=True)
         num = extract_number_from_text(text)
-
-        # if digit extraction failed (0 could be valid but we try fallback when OCR returns no text)
-        if num == 0:
-            # fallback to looser OCR (allow words) once
-            text_loose = ocr_stat_image(proc, lang=lang, digits_only=False)
-            # prefer the looser text if it has something
-            if text_loose.strip():
-                text = text_loose
-                num = extract_number_from_text(text_loose)
-
         raw_texts.append(text)
         numbers.append(num)
 
+    # fallback laxo SOLO para filas que quedaron en 0 (reduce trabajo)
+    nonzeros = sum(1 for v in numbers if v != 0)
+    if nonzeros < max(1, len(STAT_COORDS)//6):
+        for idx, val in enumerate(numbers):
+            if val == 0:
+                crop = crops[idx]
+                proc = preprocess_for_ocr(crop, upscale=1.3)
+                text_loose = ocr_stat_image(proc, lang=lang, digits_only=False)
+                n2 = extract_number_from_text(text_loose)
+                if n2 != 0:
+                    raw_texts[idx] = text_loose
+                    numbers[idx] = n2
+
     elapsed = time.time() - start_time
-    print(f"Tiempo transcurrido en captura y OCR: {elapsed:.2f} segundos")
-    # imprimir texto por stat breve (solo primeras 80 chars)
-    print("Texto OCR bruto por stat:")
-    for i, t in enumerate(raw_texts):
-        print(f"Stat {i+1}: {t.strip()[:80]}")
-    print("Números extraídos:", numbers)
+    print(f"Tiempo captura+OCR: {elapsed:.2f}s - nonzeros: {sum(1 for v in numbers if v!=0)}")
     return numbers, raw_texts
 
 if __name__ == "__main__":

@@ -268,7 +268,36 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
             # aplicar runas optimizadas (priorizar <30% min y reducir lecturas)
             print("Aplicando runas (optimizadas)...")
             prev_stats = normalize_prev(prev_stats, target_len)
-            apply_runes_optimized(stats_actuales, item_stats["min"], item_stats.get("obj", []), item_stats.get("max", []), control_events=control_events, pre_clicks=3)
+
+            # Validar lectura antes de aplicar runas: si dudosa reintentar rápido
+            suma = sum(stats_actuales) if stats_actuales else 0
+            nonzeros = sum(1 for v in (stats_actuales or []) if v != 0)
+            min_nonzeros = max(1, target_len // 6)
+            if suma == 0 or nonzeros < min_nonzeros:
+                print("Lectura dudosa antes de aplicar runas. Reintentando OCR rápido...")
+                stats_actuales_retry, _ = capture_with_retries(attempts=2, wait_between=0.16)
+                stats_actuales_retry = sanitize_and_align(stats_actuales_retry, target_len)
+                suma2 = sum(stats_actuales_retry) if stats_actuales_retry else 0
+                nonzeros2 = sum(1 for v in (stats_actuales_retry or []) if v != 0)
+                print(f"Re-captura: suma={suma2} nonzeros={nonzeros2}")
+                if suma2 == 0 or nonzeros2 < min_nonzeros:
+                    print("Persisten lecturas dudosas: se omiten runas en esta iteración.")
+                    # forzamos siguiente iteración sin aplicar runas
+                    time.sleep(0.08)
+                    ensure_ui_active()
+                    continue
+                else:
+                    stats_actuales = stats_actuales_retry
+
+            applied = apply_runes_optimized(stats_actuales, item_stats["min"], item_stats.get("obj", []), item_stats.get("max", []), control_events=control_events, pre_clicks=3)
+            # apply_runes_optimized delega y devuelve None/False si no aplicó; en nuestra implementación la aplicación ocurre dentro
+            # Tras aplicar runas, hacer UNA recaptura
+            if applied is False:
+                # No se aplicaron runas (lectura dudosa o fallo), ya pasamos a iterar
+                print("No se aplicaron runas en esta iteración.")
+                time.sleep(0.08)
+                ensure_ui_active()
+                continue
 
             # tras aplicar runas, hacemos UNA lectura para comprobar progreso
             if not _wait_handle_control(control_events):
