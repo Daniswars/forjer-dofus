@@ -108,10 +108,34 @@ def install_monkeypatches():
         MIR.mage_introduce_runes = wrapped_mage_introduce_runes
         print("DEBUG: Parche instalado en Mage_Introduce_Runes.mage_introduce_runes")
 
-     # Nota: no parcheamos introducir_exo aquí para evitar doble conteo de intentos.
-    # Contador de EXO se incrementa dentro de Mage_Introduce_Exo.introducir_exo (si puede acceder a Main.shared_state).
-    # MIE.introducir_exo = wrapped_introducir_exo
-    # print("DEBUG: Parche instalado en Mage_Introduce_Exo.introducir_exo")
+    # --- NUEVO: wrap introducir_exo para contar intentos EXO una sola vez por ejecución ---
+    if MIE is not None and hasattr(MIE, "introducir_exo"):
+        orig_introducir_exo = MIE.introducir_exo
+
+        def wrapped_introducir_exo(*args, **kwargs):
+            """
+            Llama a la función original introducir_exo y, si termina sin excepción,
+            incrementa shared_state['exo_attempts'] exactamente una vez.
+            """
+            result = None
+            try:
+                result = orig_introducir_exo(*args, **kwargs)
+            except Exception as e:
+                # no romper la ejecución principal por errores internos del exo
+                print("WARNING: introducir_exo lanzó excepción:", e)
+                raise
+            finally:
+                # Solo incrementamos si la llamada no lanzó excepción (result puede ser None)
+                try:
+                    # Aseguramos que existe shared_state y la clave
+                    shared_state["exo_attempts"] = int(shared_state.get("exo_attempts", 0)) + 1
+                    print(f"DEBUG: exo_attempts incrementado -> {shared_state['exo_attempts']}")
+                except Exception as e:
+                    print("WARNING: no se pudo incrementar shared_state['exo_attempts']:", e)
+            return result
+
+        MIE.introducir_exo = wrapped_introducir_exo
+        print("DEBUG: Parche instalado en Mage_Introduce_Exo.introducir_exo (conteo EXO)")
 
 def run_process(control_events, status_var, start_btn, stop_btn):
     """

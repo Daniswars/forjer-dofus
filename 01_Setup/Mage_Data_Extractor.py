@@ -4,6 +4,7 @@ import re
 import time
 import os
 import pytesseract
+import concurrent.futures
 
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 
@@ -29,58 +30,53 @@ ONE_EQUIVALENTS = [
 ]
 
 def normalize_number(text):
-    t = text.strip().lower().replace('O', '0')
+    t = (text or "").strip().lower().replace('O', '0')
     if t in [s.lower() for s in ONE_EQUIVALENTS]:
         return 1
     if t.isdigit():
         return int(t)
-    if re.fullmatch(r'[lI|!]+', text):
+    if re.fullmatch(r'[lI|!]+', text or ""):
         return 1
     return None
 
 def is_noise_line(line):
-    return bool(re.search(r'(.)\1{4,}', line))
+    return bool(re.search(r'(.)\1{4,}', (line or "")))
 
-def preprocess_for_ocr(img, upscale=1.3):
+def preprocess_full_image(img, upscale=1.05):
     """
-    Preprocesado más ligero para acelerar OCR:
-     - grayscale, contraste moderado, ligera nitidez
-     - upscale moderado (1.3) para ayudar a tesseract sin costar tanto
-     - umbral binario rápido
+    Preprocesado ligero aplicado a la imagen completa:
+    - convertir a L, autocontrast y contraste moderado
+    - ligero sharpen y pequeño upscale para mejorar OCR
+    - NO binarizamos (mejora precisión)
     """
-    img = img.convert("L")
-    img = ImageEnhance.Contrast(img).enhance(1.6)
-    # sharpening leve (menos costoso)
-    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=2))
-    if upscale != 1:
-        new_w = max(1, int(img.width * upscale))
-        new_h = max(1, int(img.height * upscale))
-        img = img.resize((new_w, new_h), Image.BILINEAR)
-    img = img.point(lambda p: 255 if p > 140 else 0)
-    return img
+    try:
+        im = img.convert("L")
+        im = ImageOps.autocontrast(im, cutoff=1)
+        im = ImageEnhance.Contrast(im).enhance(1.2)
+        im = im.filter(ImageFilter.UnsharpMask(radius=0.8, percent=100, threshold=1))
+        if upscale and (abs(upscale - 1.0) > 0.01):
+            new_w = max(1, int(im.width * upscale))
+            new_h = max(1, int(im.height * upscale))
+            im = im.resize((new_w, new_h), Image.BILINEAR)
+        return im
+    except Exception:
+        try:
+            return img.convert("L")
+        except Exception:
+            return img
 
-def ocr_stat_image(img, lang='spa', digits_only=True):
-    """
-    Usa config específica para dígitos cuando sea posible (más rápido y fiable).
-    """
-    if digits_only:
-        config = '--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
-        try:
-            text = pytesseract.image_to_string(img, lang=lang, config=config)
-        except Exception:
-            text = pytesseract.image_to_string(img, lang='eng', config=config)
-    else:
-        try:
-            text = pytesseract.image_to_string(img, lang=lang, config='--oem 3 --psm 6')
-        except Exception:
-            text = pytesseract.image_to_string(img, lang='eng', config='--oem 3 --psm 6')
-    return text
+def ocr_stat_image_config(img, lang='spa', config='--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'):
+    try:
+        return pytesseract.image_to_string(img, lang=lang, config=config)
+    except Exception:
+        return pytesseract.image_to_string(img, lang='eng', config=config)
 
 def extract_number_from_text(text):
-    line = text.replace('O', '0').strip()
+    line = (text or "").replace('O', '0').strip()
     if is_noise_line(line):
         return 0
-    digit_groups = re.findall(r'\d+', line)
+    line_clean = re.sub(r'[.,\s]', '', line)
+    digit_groups = re.findall(r'\d+', line_clean)
     if digit_groups:
         try:
             return int(digit_groups[-1])
@@ -93,64 +89,90 @@ def extract_number_from_text(text):
             return n
     return 0
 
-def capture_and_read_stats(save_folder=None, lang='spa'):
+def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=8):
     """
-    Single screenshot + crop per stat. OCR digits-only por defecto,
-    fallback laxo SOLO para filas que quedaron en 0.
+    Captura única de pantalla + OCR por crop usando paralelismo.
+    - Si num_stats se proporciona, solo procesa las primeras num_stats filas de STAT_COORDS.
+    - workers: número de hilos para ThreadPoolExecutor.
+    - Preprocesado aplicado a imagen completa (una vez).
+    - OCR escalonado por crop: 1) digits-only psm7, 2) digits-only psm6, 3) general psm6.
+    Devuelve (numbers:list[int], raw_texts:list[str]) y hace print con los valores leídos.
     """
     start_time = time.time()
     numbers = []
     raw_texts = []
 
-    # bounding box
-    min_x = min(x1 for (x1, y1, x2, y2) in STAT_COORDS)
-    min_y = min(y1 for (x1, y1, x2, y2) in STAT_COORDS)
-    max_x = max(x2 for (x1, y1, x2, y2) in STAT_COORDS)
-    max_y = max(y2 for (x1, y1, x2, y2) in STAT_COORDS)
+    coords = STAT_COORDS if num_stats is None else STAT_COORDS[:max(0, int(num_stats))]
+    if not coords:
+        return [], []
+
+    # bounding box sobre coords usados
+    min_x = min(x1 for (x1, y1, x2, y2) in coords)
+    min_y = min(y1 for (x1, y1, x2, y2) in coords)
+    max_x = max(x2 for (x1, y1, x2, y2) in coords)
+    max_y = max(y2 for (x1, y1, x2, y2) in coords)
     total_w = max_x - min_x
     total_h = max_y - min_y
 
+    # UNA sola captura (rápida) y un único preprocesado
     full_img = pyautogui.screenshot(region=(min_x, min_y, total_w, total_h))
     if full_img.mode != "RGB":
         full_img = full_img.convert("RGB")
 
-    # process each stat crop (faster)
-    crops = []
-    for (x1, y1, x2, y2) in STAT_COORDS:
-        rel_box = (x1 - min_x, y1 - min_y, x2 - min_x, y2 - min_y)
-        crops.append(full_img.crop(rel_box))
+    processed_full = preprocess_full_image(full_img, upscale=1.05)
 
-    # first pass: digits-only OCR
-    for crop in crops:
-        proc = preprocess_for_ocr(crop, upscale=1.3)
-        text = ocr_stat_image(proc, lang=lang, digits_only=True)
+    # preparar cajas relativas
+    rel_boxes = [(x1 - min_x, y1 - min_y, x2 - min_x, y2 - min_y) for (x1, y1, x2, y2) in coords]
+
+    def _process_crop(rel_box):
+        try:
+            crop = processed_full.crop(rel_box)
+        except Exception:
+            crop = full_img.crop((rel_box[0] + min_x, rel_box[1] + min_y, rel_box[2] + min_x, rel_box[3] + min_y))
+            try:
+                crop = crop.convert("L")
+            except Exception:
+                pass
+
+        # 1) digits-only psm7
+        text = ocr_stat_image_config(crop, lang=lang, config='--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789')
         num = extract_number_from_text(text)
-        raw_texts.append(text)
-        numbers.append(num)
+        if num != 0:
+            return num, text
 
-    # fallback laxo SOLO para filas que quedaron en 0 (reduce trabajo)
-    nonzeros = sum(1 for v in numbers if v != 0)
-    if nonzeros < max(1, len(STAT_COORDS)//6):
-        for idx, val in enumerate(numbers):
-            if val == 0:
-                crop = crops[idx]
-                proc = preprocess_for_ocr(crop, upscale=1.3)
-                text_loose = ocr_stat_image(proc, lang=lang, digits_only=False)
-                n2 = extract_number_from_text(text_loose)
-                if n2 != 0:
-                    raw_texts[idx] = text_loose
-                    numbers[idx] = n2
+        # 2) digits-only psm6
+        text2 = ocr_stat_image_config(crop, lang=lang, config='--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789')
+        num2 = extract_number_from_text(text2)
+        if num2 != 0:
+            return num2, text2
+
+        # 3) fallback general psm6
+        text3 = ocr_stat_image_config(crop, lang=lang, config='--oem 3 --psm 6')
+        num3 = extract_number_from_text(text3)
+        return num3, text3
+
+    # ejecutar OCR en paralelo manteniendo orden con executor.map
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        results = list(executor.map(_process_crop, rel_boxes))
+
+    for num, text in results:
+        numbers.append(num)
+        raw_texts.append(text)
 
     elapsed = time.time() - start_time
+    # prints de depuración: valores y textos leídos
     print(f"Tiempo captura+OCR: {elapsed:.2f}s - nonzeros: {sum(1 for v in numbers if v!=0)}")
+    print("Valores extraídos:", numbers)
+    print("Textos OCR brutos por fila:")
+    for idx, txt in enumerate(raw_texts, start=1):
+        print(f"  Stat {idx}: {repr(txt)}")
     return numbers, raw_texts
 
 if __name__ == "__main__":
     print("Preparando captura de stats individuales...")
     try:
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        folder = os.path.join(desktop, "capturas_mage_stats")
-        nums, raws = capture_and_read_stats(save_folder=folder, lang='spa')
+        nums, raws = capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=8)
+        print("Resultado final:", nums)
     except KeyboardInterrupt:
         print("Interrupción por usuario.")
     except Exception as exc:

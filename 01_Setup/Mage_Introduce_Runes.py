@@ -285,6 +285,14 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
             # no pasarse del límite por stat
             plan[i] = min(plan[i], max_extra, allowed)
 
+            # NUEVO: si la stat es de vida (vi), forzamos como máximo 1 click por iteración
+            try:
+                name_lower = str(obj).lower() if obj else ""
+                if "vi" in name_lower or obj in runas_vi:
+                    plan[i] = min(plan[i], 1)
+            except Exception:
+                pass
+
         if any(p > 0 for p in plan):
             print("Ejecutando plan adicional de clicks por stat (rondas)...")
             # Ejecutar rondas: una pulsación por stat por ronda, de arriba->abajo
@@ -338,8 +346,11 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                     except Exception as e:
                         print("ERROR al ejecutar click planificado:", e)
                     plan[i] -= 1
-                    # pausa muy corta entre clicks para que el juego procese
-                    time.sleep(0.045)
+                    # PAUSA: si la stat es vida, dejar un poco más para que el juego procese bien ese +50
+                    if obj and ("vi" in str(obj).lower() or obj in runas_vi):
+                        time.sleep(0.08)
+                    else:
+                        time.sleep(0.045)
                 # fin de ronda
                 ensure_ui_active()
                 time.sleep(0.07)
@@ -350,6 +361,9 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
             resist_indices = []
             for i in range(n):
                 obj = stats_obj[i] if i < len(stats_obj) else ""
+                # excluir runas de vida aquí (no deben recibir doble ciclo)
+                if not obj or (obj in runas_vi):
+                    continue
                 if obj and (obj in runas_re or obj in runas_re_por):
                     # comprobar si sigue por debajo del mínimo y tiene margen para 1 click más
                     actual = stats_actuales[i]
