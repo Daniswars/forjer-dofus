@@ -34,6 +34,39 @@ def ensure_ui_active():
     except Exception:
         pass
 
+# --- NUEVO HELPER: estimar incremento real por runa según objeto y columna X ---
+def estimate_increment_for(obj, x):
+    """
+    Devuelve el incremento esperado (entero) cuando se hace click en la columna X
+    para la stat 'obj'. Mantiene la lógica existente sobre qué columna se elige,
+    pero corrige la estimación (p. ej. 'vi' => +50 en columna grande, 'ini' => +100).
+    """
+    # default pequeño
+    try:
+        name = str(obj).lower()
+    except Exception:
+        name = ""
+    if x == COLUMNAS_X[0]:
+        # columna pequeña
+        return 1
+    if x == COLUMNAS_X[1]:
+        # columna media
+        # para resistencia/sustracciones suele ser +3
+        if "re" in name or "res" in name or "resistencia" in name:
+            return 3
+        # vida en columna media no suele darse, devolvemos 3/10 safe
+        return 3
+    if x == COLUMNAS_X[2]:
+        # columna grande: puede ser +10, +50 (vida) o +100 (ini)
+        if "vi" in name or "vital" in name:
+            return 50
+        if "ini" in name:
+            return 100
+        # estadisticas grandes (fuerza/inte/agilidad) ~ +10
+        return 10
+    # fallback
+    return 1
+
 def todas_estadisticas_al_60(estadisticas_actuales, estadisticas_min):
     # Devuelve True si todas las stats alcanzan al menos el 60% del mínimo
     for i in range(len(estadisticas_min)):
@@ -133,14 +166,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 did_click_any = True
                 # actualizar valor local para evitar overclick en fases siguientes
                 try:
-                    inc = 1
-                    # estimar incremento por columna X elegida
-                    if x == COLUMNAS_X[0]:
-                        inc = 1
-                    elif x == COLUMNAS_X[1]:
-                        inc = 3
-                    else:
-                        inc = 10
+                    inc = estimate_increment_for(obj, x)
                     stats_actuales[i] = stats_actuales[i] + inc
                 except Exception:
                     pass
@@ -188,13 +214,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 did_click_any = True
                 # actualizar valor local para evitar overclick en fases siguientes
                 try:
-                    inc = 1
-                    if x == COLUMNAS_X[0]:
-                        inc = 1
-                    elif x == COLUMNAS_X[1]:
-                        inc = 3
-                    else:
-                        inc = 10
+                    inc = estimate_increment_for(obj, x)
                     stats_actuales[i] = stats_actuales[i] + inc
                 except Exception:
                     pass
@@ -254,12 +274,8 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 col_x = COLUMNAS_X[0]
 
             # mapear col_x a incremento estimado
-            if col_x == COLUMNAS_X[0]:
-                inc = 1
-            elif col_x == COLUMNAS_X[1]:
-                inc = 3
-            else:
-                inc = 10
+            # reemplazado por estimación robusta
+            inc = estimate_increment_for(obj, col_x)
 
             # máximo clicks permitidos sin superar maximo
             if inc > 0:
@@ -317,12 +333,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         except Exception:
                             pass
                         # actualizar actual local para evitar sobrepasar el máximo en rondas siguientes
-                        if x == COLUMNAS_X[0]:
-                            inc = 1
-                        elif x == COLUMNAS_X[1]:
-                            inc = 3
-                        else:
-                            inc = 10
+                        inc = estimate_increment_for(obj, x)
                         stats_actuales[i] = min(stats_actuales[i] + inc, stats_max[i] if i < len(stats_max) else stats_actuales[i] + inc)
                     except Exception as e:
                         print("ERROR al ejecutar click planificado:", e)
@@ -385,7 +396,8 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         click(x, y)
                         did_click_any = True
                         # actualizar valor local (inc = 3 por defecto para resistencias)
-                        stats_actuales[i] = min(stats_actuales[i] + 3, stats_max[i] if i < len(stats_max) else stats_actuales[i] + 3)
+                        inc = estimate_increment_for(obj, x)
+                        stats_actuales[i] = min(stats_actuales[i] + inc, stats_max[i] if i < len(stats_max) else stats_actuales[i] + inc)
                         try:
                             import Main as MainModule
                             MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1

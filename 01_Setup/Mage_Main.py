@@ -132,8 +132,6 @@ def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=N
         stats_actuales = stats_actuales[:n]
 
     # parámetros
-    incr_by_col = {0: 1, 1: 3, 2: 10}
-    # obtener max clicks por stat desde Main.shared_state si existe
     default_max = pre_clicks
     try:
         import Main as MainModule
@@ -170,18 +168,18 @@ def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=N
             planned_clicks[i] = 0
             continue
         col = preferred_col[i]
-        inc = incr_by_col.get(col, 1)
+        # estimar incremento real para esta stat+col
+        obj = stats_obj[i] if i < len(stats_obj) else ""
+        inc = estimate_inc_in_main(obj, col, actual, stats_max[i] if i < len(stats_max) else 99999)
         deficit = minimo - actual
         # aproximación inicial (ceil)
         need = (deficit + inc - 1) // inc
         # evitar overshoot grande: si ceil produce mucha sobre elevación, reducir si posible
         overshoot = actual + need * inc - minimo
-        # si overshoot > inc/2 y need>1 reducimos uno (intenta menor overshoot)
         if need > 1 and overshoot > (inc // 2):
             need -= 1
         if need < 1:
-            need = 1  # al menos 1 si hay déficit pequeño
-        # limitar por max
+            need = 1
         planned_clicks[i] = min(need, default_max)
 
     # si no hay clicks planificados, dejar que la función original haga una pasada mínima
@@ -292,11 +290,73 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                     except Exception:
                         attempts_exo = 0
                     time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception:
                         pass
-                    return {"success": True, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": None}
+
+                    # --- NUEVO: intentar guardar directamente si Main_Save_Data está disponible ---
+                    saved_bool = False
+                    aux_executed = False
+                    run_aux_flag = False
+                    try:
+                        try:
+                            import Main_Save_Data as DataSaver
+                        except Exception:
+                            # intentar ruta relativa
+                            import sys
+                            from pathlib import Path
+                            sys.path.insert(0, str(Path(__file__).parent.parent))
+                            import Main_Save_Data as DataSaver
+                        # llamar finalize_session; puede devolver 0 o True en caso OK
+                        result_save = DataSaver.finalize_session(
+                            objeto=item_name,
+                            intentos=attempts_exo or 1,
+                            exito="PA",
+                            tiempo_medio_intento=time_per_attempt,
+                            modo_encadenado_activo=True,
+                            precio_objeto_base=None,
+                            precio_venta_objeto_final=None,
+                            tipo_exo="PA",
+                            kamas_iniciales_arg=None
+                        )
+                        saved_bool = (result_save in (0, True))
+                    except Exception as e:
+                        # no se pudo guardar desde aquí; marcamos para que el orquestador lo haga
+                        print("Aviso: no se pudo ejecutar Main_Save_Data.finalize_session desde Mage_Main:", e)
+                        saved_bool = False
+
+                    # Si se guardó correctamente, intentar ejecutar Aux_Guardar_exito antes del siguiente setup
+                    if saved_bool:
+                        try:
+                            try:
+                                import Aux_Guardar_exito as Aux
+                            except Exception:
+                                import sys
+                                from pathlib import Path
+                                sys.path.insert(0, str(Path(__file__).parent.parent))
+                                import Aux_Guardar_exito as Aux
+                            # Ejecutar la secuencia (bloqueante). Si prefieres no bloquear, esto puede lanzarse en hilo.
+                            Aux.perform_dofus_sequence()
+                            aux_executed = True
+                        except Exception as e:
+                            print("Aviso: no se pudo ejecutar Aux_Guardar_exito.perform_dofus_sequence():", e)
+                            aux_executed = False
+                    else:
+                        # indicar al orquestador que debe ejecutar Aux_Guardar_exito tras realizar el guardado
+                        run_aux_flag = True
+
+                    return {
+                        "success": True,
+                        "attempts": attempts_exo,
+                        "elapsed": elapsed,
+                        "time_per_attempt": time_per_attempt,
+                        "error": None,
+                        "saved": saved_bool,
+                        "aux_executed": aux_executed,
+                        "run_aux": run_aux_flag
+                    }
                 else:
                     print("EXO falló. Continuando con runas si procede.")
                     # NO incrementar contador aquí; se incrementa solo en introducir_exo
@@ -397,6 +457,29 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
         except Exception:
             pass
         return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": (elapsed / attempts_exo) if attempts_exo > 0 else None, "error": repr(e)}
+
+# --- Nuevo helper: estimar incremento por stat (coincidente con Mage_Introduce_Runes) ---
+def estimate_inc_in_main(obj_name, col_index, actual=0, maximo=99999):
+    """
+    Estima el incremento real por click según el nombre de stat y la columna elegida.
+    col_index: 0|1|2 (correspondiente a COLUMNAS_X pequeñas/medias/grandes lógicas)
+    """
+    name = str(obj_name).lower() if obj_name else ""
+    if col_index == 0:
+        return 1
+    if col_index == 1:
+        # columna media
+        if "re" in name or "res" in name or "resistencia" in name:
+            return 3
+        return 3
+    if col_index == 2:
+        # columna grande
+        if "vi" in name or "vital" in name:
+            return 50
+        if "ini" in name:
+            return 100
+        return 10
+    return 1
 
 if __name__ == "__main__":
     # Example usage: ask for item name and load stats from Setup_Item_Stats_Database
