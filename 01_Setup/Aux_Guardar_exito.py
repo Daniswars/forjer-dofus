@@ -1,12 +1,36 @@
 import pyautogui
 import time
+import pytesseract
+
+pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
+
+def wait_for_text_in_regions(target_text, regions, max_tries=30, pause=0.5):
+    """
+    Toma screenshots de las regiones (x,y,w,h) y busca target_text usando pytesseract.
+    Devuelve True si lo encuentra (en cualquier región) dentro de max_tries intentos.
+    """
+    target_l = target_text.lower()
+    for intento in range(1, max_tries + 1):
+        for (x, y, w, h) in regions:
+            try:
+                img = pyautogui.screenshot(region=(x, y, w, h))
+                txt = pytesseract.image_to_string(img).lower()
+                # debug mínimo
+                print(f"DEBUG_OCR intento {intento} region ({x},{y},{w},{h}) -> '{txt.strip()[:60]}'")
+                if target_l in txt:
+                    print(f"DEBUG_OCR: Encontrado '{target_text}' en intento {intento} en region ({x},{y})")
+                    return True
+            except Exception as e:
+                print("WARNING: fallo OCR/región:", e)
+        time.sleep(pause)
+    return False
 
 def perform_dofus_sequence():
     """
     Executes a specific sequence of actions in Dofus:
     Presses Escape, clicks a precise location (replacing 'H' press),
-    clicks a precise location, double-clicks another location,
-    and then repeats Escape and the click.
+    waits to detect 'Merkasako' in small on-screen regions (hasta 30 intentos),
+    then continues the sequence.
     """
     print("Starting Dofus action sequence...")
 
@@ -18,7 +42,18 @@ def perform_dofus_sequence():
     # Click at X=3813, Y=331 (replaces 'H' press)
     print("Clicking at X=3813, Y=331 (replacing 'H' key)...")
     pyautogui.click(x=3813, y=331)
-    time.sleep(1.2) # Longer delay as this click might open an interface
+    time.sleep(0.6) # breve pausa antes de empezar a comprobar texto
+
+    # Esperar a leer "Merkasako" en una de las dos regiones (hasta 30 intentos)
+    regions_to_check = [
+        (4, 62, 220, 36),    # X=4,Y=62, ancho/alto aproximado para la región
+        (192, 101, 220, 36)  # X=192,Y=101
+    ]
+    found = wait_for_text_in_regions("merkasako", regions_to_check, max_tries=30, pause=0.5)
+    if not found:
+        pyautogui.alert("No se detectó 'Merkasako' tras 30 intentos. Abortando secuencia.")
+        print("Abortando perform_dofus_sequence: 'Merkasako' no detectado.")
+        return
 
     # Click at the first position (from original script)
     print("Clicking at X=1590, Y=1021...")

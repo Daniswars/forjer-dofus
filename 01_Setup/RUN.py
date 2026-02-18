@@ -34,8 +34,15 @@ shared_state = {
     "rune_clicks": 0,
     # configuración
     "max_clicks_per_stat": 4,   # cuántas veces intentar clicar una stat en una pasada para llevarla >0.3*min
-    "min_threshold_factor": 0.3
+    "min_threshold_factor": 0.3,
+    "current_item": None        # nombre del item actualmente en proceso (para notificaciones)
 }
+
+# Importar correo para notificaciones desde aquí (opcional)
+try:
+    import Extra_Correo as Correo
+except Exception:
+    Correo = None
 
 # Monkeypatch helpers (se instalan justo antes de iniciar el hilo)
 def install_monkeypatches():
@@ -114,24 +121,39 @@ def install_monkeypatches():
 
         def wrapped_introducir_exo(*args, **kwargs):
             """
-            Llama a la función original introducir_exo y, si termina sin excepción,
-            incrementa shared_state['exo_attempts'] exactamente una vez.
+            Incrementa shared_state['exo_attempts'] en el momento de la llamada (cuenta invocaciones),
+            y luego llama a la función original introducir_exo.
+            Esto asegura que se contabilice la llamada aunque devuelva False o lance excepción.
             """
-            result = None
+            # Incrementar al entrar (contar la invocación)
+            try:
+                shared_state["exo_attempts"] = int(shared_state.get("exo_attempts", 0)) + 1
+                print(f"DEBUG: exo_attempts incrementado (on call) -> {shared_state['exo_attempts']}")
+            except Exception as e:
+                print("WARNING: no se pudo incrementar shared_state['exo_attempts'] al iniciar la llamada:", e)
+
+            # Si se alcanza un múltiplo de 10, enviar notificación (no bloquear si falla)
+            try:
+                if shared_state.get("exo_attempts", 0) % 10 == 0:
+                    current_item = shared_state.get("current_item", "") or ""
+                    if Correo is not None:
+                        try:
+                            Correo.send_mail(current_item, "10 intentos exo PA")
+                            print(f"DEBUG: enviado correo por 10 intentos para '{current_item}' (contador={shared_state['exo_attempts']})")
+                        except Exception as e_mail:
+                            print("WARNING: fallo al enviar correo de 10 intentos:", e_mail)
+                    else:
+                        print("DEBUG: Extra_Correo no disponible, no se envió correo de 10 intentos.")
+            except Exception as e:
+                print("WARNING: error al comprobar/enviar notificación cada 10 intentos:", e)
+
+            # Llamar a la función original y propagar excepciones si ocurren
             try:
                 result = orig_introducir_exo(*args, **kwargs)
             except Exception as e:
-                # no romper la ejecución principal por errores internos del exo
                 print("WARNING: introducir_exo lanzó excepción:", e)
+                # ya hemos contado la llamada; reenviamos la excepción para que el flujo superior la gestione
                 raise
-            finally:
-                # Solo incrementamos si la llamada no lanzó excepción (result puede ser None)
-                try:
-                    # Aseguramos que existe shared_state y la clave
-                    shared_state["exo_attempts"] = int(shared_state.get("exo_attempts", 0)) + 1
-                    print(f"DEBUG: exo_attempts incrementado -> {shared_state['exo_attempts']}")
-                except Exception as e:
-                    print("WARNING: no se pudo incrementar shared_state['exo_attempts']:", e)
             return result
 
         MIE.introducir_exo = wrapped_introducir_exo
@@ -188,6 +210,8 @@ def run_process(control_events, status_var, start_btn, stop_btn):
         # reset counters al inicio de cada ciclo
         shared_state["exo_attempts"] = 0
         shared_state["rune_clicks"] = 0
+        # asignar current item para que el wrapper lo use en notificaciones
+        shared_state["current_item"] = item_name
 
         # 2) Guardar kamas iniciales
         if DataSaver is not None:
@@ -209,18 +233,33 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             print("ERROR en Mage_Main:", e)
             result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": repr(e)}
 
-        # Interpretar resultado
-        success_flag = result.get("success", False) if isinstance(result, dict) else False
-        error_code = result.get("error", None) if isinstance(result, dict) else None
-        time_per_attempt = result.get("time_per_attempt", None) if isinstance(result, dict) else None
+        # --- NUEVA LÓGICA: normalizar result y obtener elapsed/attempts/time_per_attempt ---
+        if not isinstance(result, dict):
+            result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": None}
 
-        # Intentos a guardar: SOLO desde contador de exo (introducir_exo)
-        attempts_to_save = shared_state.get("exo_attempts", 0)
-        # Nota: si no ha habido ningún intento de exo, attempts_to_save puede ser 0 (se respeta)
+        elapsed = result.get("elapsed", 0.0)
+        time_per_attempt = result.get("time_per_attempt", None)
 
-        # 4) Comportamiento específico: si no_progress -> guardar fallo, popup y TERMINAR el bucle
+        # attempts: preferimos shared_state (actualizado por el wrapper) si está disponible y es entero >=0
+        try:
+            attempts_to_save = int(shared_state.get("exo_attempts", 0))
+        except Exception:
+            attempts_to_save = int(result.get("attempts", 0) or 0)
+
+        # si no tenemos time_per_attempt calculado y hay attempts, calcularlo aquí
+        if time_per_attempt is None and attempts_to_save > 0:
+            try:
+                time_per_attempt = float(elapsed) / attempts_to_save
+            except Exception:
+                time_per_attempt = None
+
+        # Flags para las ramas siguientes
+        error_code = result.get("error")
+        success_flag = bool(result.get("success", False))
+
+        # 4) Comportamiento específico: si no_progress -> guardar fallo, popup y decidir continuar o terminar
         if error_code == "no_progress":
-            print("DEBUG: No progress detectado (sin runas). Guardando como fallo y deteniendo.")
+            print("DEBUG: No progress detectado (sin runas). Guardando como fallo.")
             if DataSaver is not None:
                 try:
                     status_var.set("Guardando fallo (sin runas)...")
@@ -235,17 +274,48 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         tipo_exo=None,
                         kamas_iniciales_arg=None
                     )
-                    print(f"DEBUG_SAVEFLOW: guardado fallo no_progress saved={saved} attempts_saved={attempts_to_save}")
+                    print(f"DEBUG_SAVEFLOW: guardado fallo no_progress saved={saved} attempts_saved={attempts_to_save} time_per_attempt={time_per_attempt}")
                 except Exception as e:
                     print("ERROR al guardar fallo (no_progress):", e)
                     status_var.set("Error al guardar fallo")
-            # Mostrar ventana emergente informando y terminar (usar start_btn.after para UI-thread)
+
+            # Mostrar ventana emergente en el hilo de la UI y esperar la respuesta del usuario.
+            # Usamos start_btn.after para lanzar el dialog en el hilo principal y threading.Event para sincronizar.
+            import threading
+            response = {"val": None}
+            response_event = threading.Event()
+
+            def ask_continue_dialog():
+                try:
+                    ans = messagebox.askyesno("Sin runas", "No quedan runas PA. ¿Continuar (omitir este objeto) ?\n\nSi eliges 'No' se detendrá la ejecución.")
+                    response["val"] = bool(ans)
+                except Exception:
+                    response["val"] = False
+                finally:
+                    response_event.set()
+
             try:
-                start_btn.after(0, lambda: messagebox.askyesno("Sin runas", "No quedan runas. ¿Continuar (guardar fallo) o Detener?"))
-            except Exception:
-                print("Aviso: no se pudo mostrar popup 'Sin runas' (posible entorno no gráfico).")
-            # No continuar con setup: salir del bucle principal
-            break
+                # lanzar diálogo en UI thread
+                start_btn.after(0, ask_continue_dialog)
+                # esperar respuesta (esto bloquea el hilo worker pero no la UI)
+                response_event.wait()
+            except Exception as e:
+                print("Aviso: no se pudo mostrar diálogo de 'Sin runas' (entorno no gráfico?):", e)
+                response["val"] = False
+
+            user_chose_continue = bool(response.get("val", False))
+            if user_chose_continue:
+                print("Usuario eligió continuar tras 'Sin runas'. Se reanuda el bucle principal.")
+                status_var.set("Usuario eligió continuar (sin runas).")
+                # continuar con el bucle principal (no ejecutar setup-stop)
+                # pequeña pausa para estabilizar UI
+                time.sleep(0.3)
+                continue
+            else:
+                print("Usuario eligió detener tras 'Sin runas'. Terminando bucle.")
+                status_var.set("Detenido por usuario tras 'Sin runas'.")
+                # salir del bucle principal
+                break
 
         # 5) Si éxito: guardar éxito (sin popups) y continuar con siguiente ciclo (setup)
         if success_flag:
@@ -264,7 +334,7 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         tipo_exo="PA",
                         kamas_iniciales_arg=None
                     )
-                    print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved} attempts_saved={attempts_to_save}")
+                    print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved} attempts_saved={attempts_to_save} time_per_attempt={time_per_attempt}")
                 except Exception as e:
                     print("ERROR al guardar éxito:", e)
                     status_var.set("Error al guardar éxito")

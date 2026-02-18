@@ -130,12 +130,7 @@ def obtener_valores(nombre_ventana, columnas_x, filas_y, celdas_no_procesar, est
 
     _last_objeto_seleccionado = objeto_seleccionado_para_log
 
-    ventanas = gw.getWindowsWithTitle(nombre_ventana)
-    if not ventanas:
-        print(f"ERROR: no se encontró la ventana con título '{nombre_ventana}'. Asegúrate de que la ventana esté abierta y visible.")
-        return [], True
-
-    ventana_juego = ventanas[0]
+    ventana_juego = gw.getWindowsWithTitle(nombre_ventana)[0]
     ventana_x, ventana_y, ventana_ancho, ventana_alto = ventana_juego.left, ventana_juego.top, ventana_juego.width, ventana_juego.height
 
     # La captura de pantalla en sí misma es una operación que toma tiempo.
@@ -147,14 +142,17 @@ def obtener_valores(nombre_ventana, columnas_x, filas_y, celdas_no_procesar, est
     log_configured_workers()
 
     # --- CAMBIO CLAVE AQUÍ ---
+    # Determinar el número de filas a leer basado en la longitud de estadisticas_min
     num_filas_a_leer = len(estadisticas_min)
     if num_filas_a_leer == 0:
         print("ADVERTENCIA: estadisticas_min está vacío, no se leerán estadísticas del objeto.")
         return [], False # No hay estadísticas que leer
 
     print(f"DEBUG: Se procesarán {num_filas_a_leer} filas (estadísticas) para el objeto '{objeto_seleccionado_para_log}'.")
+    # Asegúrate de que filas_y tenga suficientes coordenadas para las filas que quieres leer
     if num_filas_a_leer > len(filas_y) - 1:
         print(f"ERROR: No hay suficientes coordenadas de filas ('filas_y') para leer {num_filas_a_leer} estadísticas. Max filas disponibles: {len(filas_y) - 1}.")
+        # Podrías optar por un reseteo aquí o simplemente retornar vacío
         _reset_session_from_data_runner(reason=f"Coordenadas de filas insuficientes para {num_filas_a_leer} estadísticas.")
         return [], True
     # --- FIN DEL CAMBIO CLAVE ---
@@ -162,29 +160,43 @@ def obtener_valores(nombre_ventana, columnas_x, filas_y, celdas_no_procesar, est
 
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=10) as executor:
-        # Recorremos las columnas disponibles (hasta len(columnas_x)-1 porque usamos i+1 para el crop)
-        for i in range(0, len(columnas_x) - 1):
+        # Se empieza desde la columna 2 (índice 2) según tu uso habitual
+        # El bucle ahora solo va hasta `num_filas_a_leer` para el índice `j`
+        for i in range(2, len(columnas_x) - 1): # Bucle para las columnas
             row_results_futures = []
+            # Bucle para las filas, limitado por num_filas_a_leer
             for j in range(num_filas_a_leer):
                 if (i, j) not in celdas_no_procesar:
+                    # Asegurarse de que los índices de filas_y y columnas_x sean válidos
                     if j + 1 < len(filas_y) and i + 1 < len(columnas_x):
                         captura_celda = captura_ventana.crop((columnas_x[i], filas_y[j], columnas_x[i+1], filas_y[j+1]))
                         future = executor.submit(procesar_celda, captura_celda, i, j)
                         row_results_futures.append(future)
                         current_cycle_cell_results.append(future)
                     else:
+                        # Esto no debería ocurrir si las comprobaciones previas son correctas, pero es un seguro
                         print(f"ADVERTENCIA: Índices fuera de rango para celda ({i}, {j}). Omitiendo.")
                         row_results_futures.append(executor.submit(lambda: 0))
                 else:
                     row_results_futures.append(executor.submit(lambda: 0))
 
+            # Esperar los resultados de la fila actual y añadir a la matriz
             matriz_valores.append([f.result() for f in row_results_futures])
     t1 = time.time()
     print(f"Tiempo total de procesamiento OCR de celdas: {t1-t0:.2f} segundos")
 
     celdas_con_texto_raro = 0
+    # current_cycle_cell_results contiene los Futures, necesitamos los resultados para comprobar
     processed_results = [f.result() for f in current_cycle_cell_results]
-    total_celdas_procesadas_actual = len(processed_results)
+    total_celdas_procesadas_actual = len(processed_results) # Recuento real de celdas que se intentaron procesar
+
+    # La lógica de "texto raro" debe basarse en si procesar_celda devuelve algo "inesperado" o si una celda crucial es 0.
+    # Con la actual `procesar_celda` que siempre devuelve un int, `celdas_con_texto_raro` siempre será 0.
+    # Si quieres detectar "texto raro", `procesar_celda` debería devolver un tipo diferente (ej. None o una string especial)
+    # cuando no puede parsear un número, y luego contar esos casos aquí.
+    # Por ahora, mantendremos la estructura, pero ten en cuenta esta limitación.
+    # Por ejemplo:
+    # if not isinstance(result, int): celdas_con_texto_raro += 1
 
     if total_celdas_procesadas_actual > 0:
         porcentaje_texto_raro = celdas_con_texto_raro / total_celdas_procesadas_actual
@@ -199,6 +211,8 @@ def obtener_valores(nombre_ventana, columnas_x, filas_y, celdas_no_procesar, est
         else:
             _count_texto_raro_consecutivo = 0
     else:
+        # Esto ocurre si num_filas_a_leer es 0 o si todas las celdas están en celdas_no_procesar
+        # y no se envió ninguna al executor. Esto es un caso problemático si se esperaban stats.
         _count_texto_raro_consecutivo += 1
         print(f"ALERTA: No se detectaron celdas procesables. Consecutivas: {_count_texto_raro_consecutivo}/{CONTEO_DE_COMPROBACIONES_DE_TEXTO_RARO}.")
         if _count_texto_raro_consecutivo >= CONTEO_DE_COMPROBACIONES_DE_TEXTO_RARO:

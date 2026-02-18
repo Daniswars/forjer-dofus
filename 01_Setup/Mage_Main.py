@@ -4,7 +4,7 @@ import pyautogui
 
 from Mage_Data_Extractor import capture_and_read_stats
 from Mage_Introduce_Runes import mage_introduce_runes
-from Mage_Introduce_Exo import introducir_exo
+import Mage_Introduce_Exo as Mage_Introduce_Exo_mod
 from Mage_Exo_Verify import verify_success
 import Extra_Correo as Correo
 
@@ -134,7 +134,7 @@ def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=N
     # parámetros
     default_max = pre_clicks
     try:
-        import Main as MainModule
+        import RUN as MainModule
         default_max = int(MainModule.shared_state.get("max_clicks_per_stat", default_max))
     except Exception:
         pass
@@ -228,20 +228,35 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
     target_len = len(item_stats["min"])
     start_time = time.time()
 
+    def _make_result(success, error=None, extra=None):
+        """
+        Helper para construir el diccionario de retorno con elapsed, attempts y time_per_attempt
+        usando shared_state['exo_attempts'] (vía Main.shared_state si existe).
+        """
+        elapsed = time.time() - start_time
+        attempts_exo = 0
+        try:
+            import RUN as MainModule
+            attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
+        except Exception:
+            attempts_exo = 0
+        time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+        res = {
+            "success": bool(success),
+            "attempts": attempts_exo,
+            "elapsed": elapsed,
+            "time_per_attempt": time_per_attempt,
+            "error": error
+        }
+        if extra and isinstance(extra, dict):
+            res.update(extra)
+        return res
+
     try:
         while True:
             # control (pausa/stop)
             if not _wait_handle_control(control_events):
-                # calcular elapsed y attempts desde shared_state si es posible
-                elapsed = time.time() - start_time
-                attempts_exo = 0
-                try:
-                    import Main as MainModule
-                    attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-                except Exception:
-                    attempts_exo = 0
-                time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
-                return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
+                return _make_result(False, error="stopped_by_user")
 
             # ---------- UNA SÓLA CAPTURA RÁPIDA antes de decidir ----------
             valores, _ = capture_and_read_stats()
@@ -266,37 +281,27 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
             if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
                 print("Stats dentro de mínimos -> introducir exo.")
                 if not _wait_handle_control(control_events):
-                    elapsed = time.time() - start_time
-                    attempts_exo = 0
-                    try:
-                        import Main as MainModule
-                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-                    except Exception:
-                        attempts_exo = 0
-                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
-                    return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
+                    return _make_result(False, error="stopped_by_user")
 
                 # introducir EXO (la función introducir_exo debe incrementar el contador global en Main.shared_state)
-                introducir_exo()
+                try:
+                    Mage_Introduce_Exo_mod.introducir_exo()
+                except Exception:
+                    try:
+                        from Mage_Introduce_Exo import introducir_exo as __introducir_exo_fallback
+                        __introducir_exo_fallback()
+                    except Exception as _e:
+                        print("ERROR: no se pudo ejecutar introducir_exo():", _e)
+
                 time.sleep(0.08)  # dar tiempo al juego
                 print("Verificando exo...")
                 if verify_success():
-                    elapsed = time.time() - start_time
-                    # obtener intentos a partir del contador global
-                    attempts_exo = 0
-                    try:
-                        import Main as MainModule
-                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-                    except Exception:
-                        attempts_exo = 0
-                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
-
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception:
                         pass
 
-                    # --- NUEVO: intentar guardar directamente si Main_Save_Data está disponible ---
+                    # intentar guardar directamente si Main_Save_Data está disponible
                     saved_bool = False
                     aux_executed = False
                     run_aux_flag = False
@@ -304,17 +309,15 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                         try:
                             import Main_Save_Data as DataSaver
                         except Exception:
-                            # intentar ruta relativa
                             import sys
                             from pathlib import Path
                             sys.path.insert(0, str(Path(__file__).parent.parent))
                             import Main_Save_Data as DataSaver
-                        # llamar finalize_session; puede devolver 0 o True en caso OK
                         result_save = DataSaver.finalize_session(
                             objeto=item_name,
-                            intentos=attempts_exo or 1,
+                            intentos=int(_make_result(True)["attempts"]) or 1,
                             exito="PA",
-                            tiempo_medio_intento=time_per_attempt,
+                            tiempo_medio_intento=None,  # Main will compute based on shared_state
                             modo_encadenado_activo=True,
                             precio_objeto_base=None,
                             precio_venta_objeto_final=None,
@@ -323,11 +326,9 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                         )
                         saved_bool = (result_save in (0, True))
                     except Exception as e:
-                        # no se pudo guardar desde aquí; marcamos para que el orquestador lo haga
                         print("Aviso: no se pudo ejecutar Main_Save_Data.finalize_session desde Mage_Main:", e)
                         saved_bool = False
 
-                    # Si se guardó correctamente, intentar ejecutar Aux_Guardar_exito antes del siguiente setup
                     if saved_bool:
                         try:
                             try:
@@ -337,31 +338,18 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                                 from pathlib import Path
                                 sys.path.insert(0, str(Path(__file__).parent.parent))
                                 import Aux_Guardar_exito as Aux
-                            # Ejecutar la secuencia (bloqueante). Si prefieres no bloquear, esto puede lanzarse en hilo.
                             Aux.perform_dofus_sequence()
                             aux_executed = True
                         except Exception as e:
                             print("Aviso: no se pudo ejecutar Aux_Guardar_exito.perform_dofus_sequence():", e)
                             aux_executed = False
                     else:
-                        # indicar al orquestador que debe ejecutar Aux_Guardar_exito tras realizar el guardado
                         run_aux_flag = True
 
-                    return {
-                        "success": True,
-                        "attempts": attempts_exo,
-                        "elapsed": elapsed,
-                        "time_per_attempt": time_per_attempt,
-                        "error": None,
-                        "saved": saved_bool,
-                        "aux_executed": aux_executed,
-                        "run_aux": run_aux_flag
-                    }
+                    return _make_result(True, extra={"saved": saved_bool, "aux_executed": aux_executed, "run_aux": run_aux_flag})
                 else:
                     print("EXO falló. Continuando con runas si procede.")
-                    # NO incrementar contador aquí; se incrementa solo en introducir_exo
-                    # Esperar y continuar (no forzar incremento)
-                    time.sleep(0.06)  # antes 0.18 -> ahora 0.06
+                    time.sleep(0.06)
                     ensure_ui_active()
                     continue
 
@@ -369,7 +357,6 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
             print("Aplicando runas (optimizadas)...")
             prev_stats = normalize_prev(prev_stats, target_len)
 
-            # Validar lectura antes de aplicar runas: si dudosa -> no aplicar (NO re-capturar aquí)
             suma = sum(stats_actuales) if stats_actuales else 0
             nonzeros = sum(1 for v in (stats_actuales or []) if v != 0)
             min_nonzeros = max(1, target_len // 6)
@@ -380,72 +367,43 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 continue
 
             applied = apply_runes_optimized(stats_actuales, item_stats["min"], item_stats.get("obj", []), item_stats.get("max", []), control_events=control_events, pre_clicks=3)
-            # Tras aplicar runas, hacer UNA recaptura (rápida)
             if applied is False:
-                # No se aplicaron runas (lectura dudosa o fallo), ya pasamos a iterar
                 print("No se aplicaron runas en esta iteración.")
                 time.sleep(0.04)
                 ensure_ui_active()
                 continue
 
-            # tras aplicar runas, hacemos UNA lectura para comprobar progreso
             if not _wait_handle_control(control_events):
-                elapsed = time.time() - start_time
-                attempts_exo = 0
-                try:
-                    import Main as MainModule
-                    attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-                except Exception:
-                    attempts_exo = 0
-                time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
-                return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "stopped_by_user"}
+                return _make_result(False, error="stopped_by_user")
 
             time.sleep(0.05)
-            # UNA sola captura rápida post-runas
             stats_nuevos, _ = capture_and_read_stats()
             stats_nuevos = sanitize_and_align(stats_nuevos, target_len)
 
             print(f"Post-runas stats: {stats_nuevos}")
 
-            # detección de no progreso
             if prev_stats is not None and stats_nuevos == prev_stats:
                 no_progress_count += 1
                 print(f"No progress ({no_progress_count}/{no_progress_limit})")
                 if no_progress_count >= no_progress_limit:
-                    elapsed = time.time() - start_time
-                    attempts_exo = 0
-                    try:
-                        import Main as MainModule
-                        attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-                    except Exception:
-                        attempts_exo = 0
-                    time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
                     try:
                         Correo.send_mail(item_name, "Sin runas")
                     except Exception:
                         pass
-                    return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": time_per_attempt, "error": "no_progress"}
+                    return _make_result(False, error="no_progress")
             else:
                 no_progress_count = 0
 
             prev_stats = list(stats_nuevos)
-            # breve espera antes de la siguiente iteración (más corta)
             time.sleep(0.04)
             continue
 
     except Exception as e:
-        elapsed = time.time() - start_time
-        attempts_exo = 0
-        try:
-            import Main as MainModule
-            attempts_exo = int(MainModule.shared_state.get("exo_attempts", 0))
-        except Exception:
-            attempts_exo = 0
         try:
             Correo.send_mail(item_name, "Finalizar forzado")
         except Exception:
             pass
-        return {"success": False, "attempts": attempts_exo, "elapsed": elapsed, "time_per_attempt": (elapsed / attempts_exo) if attempts_exo > 0 else None, "error": repr(e)}
+        return _make_result(False, error=repr(e))
 
 # --- Nuevo helper: estimar incremento por stat (coincidente con Mage_Introduce_Runes) ---
 def estimate_inc_in_main(obj_name, col_index, actual=0, maximo=99999):

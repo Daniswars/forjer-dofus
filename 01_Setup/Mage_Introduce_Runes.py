@@ -2,6 +2,8 @@ import pyautogui
 import time
 import sys
 from pathlib import Path
+import inspect
+from datetime import datetime
 
 # Coordenadas de columnas (X) y filas (Y) para las celdas de runas
 COLUMNAS_X = [2054, 2117, 2189]  # X de los 3 huecos (pequeña, media, grande)
@@ -15,15 +17,22 @@ def get_fila_y(idx):
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.03
 
-def click(x, y):
+def click(x, y, reason=None):
     """
-    Realiza un único click fiable en (x, y).
+    Realiza un único click fiable en (x, y) y hace print de depuración.
+    - reason: cadena opcional indicando por qué se hace el click (ayuda al debug).
     """
     try:
+        # información del llamador para trazas
+        caller = inspect.stack()[1]
+        caller_fn = caller.function
+        caller_line = caller.lineno
+        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        print(f"[CLICK] {ts} called_by={caller_fn}:{caller_line} coords=({x},{y}) reason={reason!r}")
         pyautogui.moveTo(x, y, duration=0.05)
         pyautogui.click()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[CLICK-ERROR] al intentar click en ({x},{y}) reason={reason!r} error={e}")
     time.sleep(0.06)
 
 def ensure_ui_active():
@@ -236,7 +245,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
         max_extra = 3
         if max_clicks_per_stat is None:
             try:
-                import Main as MainModule
+                import RUN as MainModule
                 max_extra = int(MainModule.shared_state.get("max_clicks_per_stat", max_extra))
             except Exception:
                 pass
@@ -330,13 +339,25 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                     else:
                         x = COLUMNAS_X[0]
 
+                    # REVISIÓN CRUCIAL: recomprobar si el click sigue siendo necesario justo antes
+                    minimo = stats_min[i]
+                    inc = estimate_increment_for(obj, x)
+                    # si ya alcanza mínimo, cancelar plan para ese índice
+                    if actual >= minimo:
+                        plan[i] = 0
+                        continue
+                    # si un click adicional lo desbordaría sobre el máximo, cancelar
+                    if inc <= 0 or (actual + inc) > maximo:
+                        plan[i] = 0
+                        continue
+
                     y = get_fila_y(i)
                     try:
-                        click(x, y)
+                        #click(x, y)
                         did_click_any = True
                         # intentar incrementar contador global de runa clicks si existe
                         try:
-                            import Main as MainModule
+                            import RUN as MainModule
                             MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1
                         except Exception:
                             pass
@@ -406,6 +427,10 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                     else:
                         x = COLUMNAS_X[0]
                     y = get_fila_y(i)
+                    # REVISIÓN: comprobar de nuevo antes del click que sigue siendo necesario
+                    inc = estimate_increment_for(obj, x)
+                    if actual >= stats_min[i] or inc <= 0 or (actual + inc) > maximo:
+                        continue
                     try:
                         click(x, y)
                         did_click_any = True
@@ -413,7 +438,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         inc = estimate_increment_for(obj, x)
                         stats_actuales[i] = min(stats_actuales[i] + inc, stats_max[i] if i < len(stats_max) else stats_actuales[i] + inc)
                         try:
-                            import Main as MainModule
+                            import RUN as MainModule
                             MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1
                         except Exception:
                             pass
@@ -422,6 +447,31 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                     time.sleep(0.05)
                 ensure_ui_active()
                 time.sleep(0.08)
+
+    # --- AÑADIDO: click final seguro para evitar "clicks fantasma" posteriores ---
+    # Si se hicieron clicks en esta ejecución, ejecutar un click final en la coordenada segura
+    # (evita que el cursor quede en una zona que provoque pulsaciones fantasma).
+    try:
+        if did_click_any:
+            SAFE_CLICK_X, SAFE_CLICK_Y = 2679, 1151
+            try:
+                # usar nuestra función click para que se registre en los logs
+                click(SAFE_CLICK_X, SAFE_CLICK_Y, reason="safe_final")
+                time.sleep(0.06)
+                # mover cursor a zona neutra para evitar que quede sobre un elemento interactivo
+                NEUTRAL_X, NEUTRAL_Y = 100, 100
+                try:
+                    pyautogui.moveTo(NEUTRAL_X, NEUTRAL_Y, duration=0.04)
+                    print(f"[MOVE] movido a zona neutra ({NEUTRAL_X},{NEUTRAL_Y})")
+                except Exception:
+                    pass
+                ensure_ui_active()
+                time.sleep(0.06)
+            except Exception:
+                pass
+    except Exception:
+        # no interrumpir la lógica por fallo en el click final
+        pass
 
     # devolvemos True si se hicieron clicks en alguna fase
     return bool(did_click_any)

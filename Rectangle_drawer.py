@@ -1,34 +1,83 @@
+import time
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import time
 
-time.sleep(2)
+try:
+    from PIL import ImageGrab
+except Exception:
+    ImageGrab = None
 
-def dibujar_rectangulo():
-    # Coordenadas de las columnas
-    columnas_x = [1270, 1370, 1526, 1600, 2000, 2065, 2130, 2190]
-    #columnas_x = [700, 750, 800, 1100, 1150, 1200, 1250]  # ~pantalla pocha
-    # Coordenadas de las filas
-    filas_y = [750, 820, 880, 955, 1015, 1090, 1150, 1220, 1290, 1360, 1430, 1500, 1560, 1630]
-    #filas_y = [330, 370, 405, 445, 485, 525]  # pantalla pocha
+import numpy as np
 
-    # Ajustar límites de las columnas
-    columnas_x = [max(columnas_x[0], 700)] + columnas_x + [min(columnas_x[-1], 1250)]
+time.sleep(0.2)
 
-    # Ajustar límites de las filas
-    filas_y = [max(filas_y[0], 330)] + filas_y + [min(filas_y[-1], 525)]
+def _take_screenshot():
+    """Intenta tomar una captura de pantalla y devuelve un PIL.Image (o None)."""
+    if ImageGrab is not None:
+        try:
+            return ImageGrab.grab()
+        except Exception:
+            pass
+    try:
+        import pyautogui
+        return pyautogui.screenshot()
+    except Exception:
+        return None
 
-    # Crear figura y ejes
-    fig, ax = plt.subplots()
+def dibujar_rectangulos(screenshot_background=True):
+    # Lista de rectángulos: (x1, y1, x2, y2)
+    general_x1 = 1554
+    general_x2 = 1650
+    rects = [
+        (general_x1, 756, general_x2, 823),
+        (general_x1, 823, general_x2, 891),
+        (general_x1, 891, general_x2, 958),
+        (general_x1, 958, general_x2, 1026),
+        (general_x1, 1026, general_x2, 1097),
+        (general_x1, 1097, general_x2, 1161),
+        (general_x1, 1161, general_x2, 1235),
+        (general_x1, 1235, general_x2, 1302),
+        (general_x1, 1302, general_x2, 1367),
+        (general_x1, 1367, general_x2, 1437),
+        (general_x1, 1437, general_x2, 1506),
+        (general_x1, 1506, general_x2, 1574),
+        (general_x1, 1574, general_x2, 1644),
+    ]
 
-    # Recorrer los espacios de la matriz
-    for i in range(len(columnas_x) - 1):
-        for j in range(len(filas_y) - 1):
-            x1, x2 = columnas_x[i], columnas_x[i + 1]
-            y1, y2 = filas_y[j], filas_y[j + 1]
+    fig, ax = plt.subplots(figsize=(10, 8))
 
-            # Dibujar rectángulo en cada celda de la matriz
-            rect_celda = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='g', facecolor='none')
-            ax.add_patch(rect_celda)
+    if screenshot_background:
+        img = _take_screenshot()
+        if img is not None:
+            arr = np.array(img)
+            h, w = arr.shape[:2]
+            # mostrar la imagen con origen en la esquina superior izquierda y ajustar ejes
+            ax.imshow(arr, origin='upper')
+            ax.set_xlim(0, w)
+            ax.set_ylim(h, 0)  # invertir eje Y para coordenadas de pantalla
+        else:
+            # Si no hay captura, ajustar ejes a las coordenadas de interés
+            min_x = min(r[0] for r in rects)
+            max_x = max(r[2] for r in rects)
+            min_y = min(r[1] for r in rects)
+            max_y = max(r[3] for r in rects)
+            padding = 20
+            ax.set_xlim(min_x - padding, max_x + padding)
+            ax.set_ylim(max_y + padding, min_y - padding)
 
+    # dibujar cada rectángulo y una etiqueta pequeña
+    for idx, (x1, y1, x2, y2) in enumerate(rects, start=1):
+        w = x2 - x1
+        h = y2 - y1
+        rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor='lime', facecolor='none')
+        ax.add_patch(rect)
+        ax.text(x1 + 6, y1 + 12, f"{idx}", color='yellow', fontsize=9, weight='bold',
+                bbox=dict(facecolor='black', alpha=0.5, pad=1, edgecolor='none'))
 
+    ax.set_aspect('equal')
+    ax.set_title("Rectángulos sobre captura de pantalla")
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    dibujar_rectangulos()
