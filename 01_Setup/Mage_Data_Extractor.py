@@ -10,11 +10,11 @@ from pytesseract import Output
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 
 # Coordenadas de las filas (stats)
-general_x1 = 1554
-general_x2 = 1630
+general_x1 = 1552
+general_x2 = 1600
 STAT_COORDS = [
     (general_x1, 756, general_x2, 823),
-    (general_x1, 823, general_x2, 891),
+    (general_x1, 823, 1610, 891),
     (general_x1, 891, general_x2, 958),
     (general_x1, 958, general_x2, 1026),
     (general_x1, 1026, general_x2, 1097),
@@ -25,11 +25,11 @@ STAT_COORDS = [
     (general_x1, 1367, general_x2, 1437),
     (general_x1, 1437, general_x2, 1506),
     (general_x1, 1506, general_x2, 1574),
-    (general_x1, 1574, general_x2, 1644),
+    (general_x1, 1574, general_x2-15, 1644),
 ]
 
 ONE_EQUIVALENTS = [
-    "1", "l", "I", "L", "|", "!", "lalcance", "lalcanze", "lalcanse", "lal", r"lalcanc\n"
+    "1", "l", "I", "L", "|", "!", "lalcance", "lalcanze", "lalcanse", "lal", r"lalcanc\n", "lin", "lin"
 ]
 
 # --- Añadido: helper para comparar tokens con ONE_EQUIVALENTS manejando '\n' ---
@@ -57,6 +57,13 @@ def normalize_number(text):
     t = (text or "")
     if not t:
         return None
+
+    # Eliminar saltos de línea reales y la secuencia literal '\n' si aparecen
+    try:
+        t = t.replace('\r', '').replace('\n', '')
+        t = t.replace('\\n', '')
+    except Exception:
+        pass
 
     # Si el token se parece a uno de los equivalentes a "1", devolver 1
     try:
@@ -113,8 +120,14 @@ def ocr_stat_image_config(img, lang='spa', config='--oem 3 --psm 7 -c tessedit_c
         return pytesseract.image_to_string(img, lang='eng', config=config)
 
 def extract_number_from_text(text):
-    # Tratamiento rápido para textos ya obtenidos (fallback)
-    line = (text or "").replace('O', '0').replace('o', '0').strip()
+    # Eliminar saltos de línea reales y la secuencia literal '\n' antes de procesar
+    line = (text or "")
+    try:
+        line = line.replace('\r', '').replace('\n', '')
+        line = line.replace('\\n', '')
+    except Exception:
+        pass
+    line = line.replace('O', '0').replace('o', '0').strip()
     if is_noise_line(line):
         return 0
     # limpiar miles y espacios
@@ -148,8 +161,13 @@ def _best_numeric_token_from_image(img, config):
         for tok, conf in zip(texts, confs):
             if not tok or str(tok).strip() == "":
                 continue
-            # limpiar token
+            # limpiar token y eliminar saltos de línea reales y literales
             tok_clean = tok.replace('O', '0').replace('o', '0').replace('l', '1').replace('I', '1')
+            try:
+                tok_clean = tok_clean.replace('\r', '').replace('\n', '')
+                tok_clean = tok_clean.replace('\\n', '')
+            except Exception:
+                pass
             if re.search(r'\d', tok_clean):
                 # convertir conf seguro
                 try:
@@ -160,7 +178,11 @@ def _best_numeric_token_from_image(img, config):
                 if n is not None and conf_v > best_conf:
                     best_conf = conf_v
                     best_num = n
-                    best_text = tok
+                    # guardar texto original saneado para debug (sin saltos)
+                    try:
+                        best_text = str(tok).replace('\r', '').replace('\n', '').replace('\\n', '')
+                    except Exception:
+                        best_text = str(tok)
         if best_num is not None:
             return best_num, best_text, best_conf
     except Exception:
@@ -302,8 +324,23 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
         results = list(executor.map(_process_crop, rel_boxes))
 
     for num, text in results:
+        # limpiar textos brutos para que no contengan '\n' o '\\n'
+        try:
+            txt_clean = (text or "")
+            txt_clean = txt_clean.replace('\r', '').replace('\n', '').replace('\\n', '')
+        except Exception:
+            txt_clean = text
+
+        # Si el texto limpio corresponde a un equivalente de "1", forzar número y texto a '1'
+        try:
+            if matches_one_equivalent(txt_clean):
+                num = 1
+                txt_clean = '1'
+        except Exception:
+            pass
+
         numbers.append(num)
-        raw_texts.append(text)
+        raw_texts.append(txt_clean)
 
     elapsed = time.time() - start_time
     # prints de depuración: valores y textos leídos

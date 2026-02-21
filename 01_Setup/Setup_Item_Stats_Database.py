@@ -91,7 +91,7 @@ ITEM_STATS = {
     },
     "Anillo de noai aludem": {
         "min": [86, 55, 55, 21, 6, 1, 1, 6, 6, 8, 3, 3, 11],
-        "max": [100, 60, 60, 40, 6, 1, 1, 6, 6, 8, 10, 10, 11],
+        "max": [100, 60, 60, 30, 6, 1, 1, 6, 6, 8, 10, 10, 11],
         "obj": ["vi", "inte", "agi", "sa", "cri", "al", "inv", "da_fuego", "da_aire", "re_agua_por", "re_tierra",
                 "re_aire", "da_cri"]
     },

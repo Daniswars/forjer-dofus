@@ -4,6 +4,10 @@ import pytesseract
 
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 
+# Factor global para ralentizar/ajustar todos los sleeps de este script.
+# Cambia este valor a 1.0 para comportamiento original, >1.0 para más lento.
+SLOW_FACTOR = 2
+
 def wait_for_text_in_regions(target_text, regions, max_tries=30, pause=0.5):
     """
     Toma screenshots de las regiones (x,y,w,h) y busca target_text usando pytesseract.
@@ -22,7 +26,7 @@ def wait_for_text_in_regions(target_text, regions, max_tries=30, pause=0.5):
                     return True
             except Exception as e:
                 print("WARNING: fallo OCR/región:", e)
-        time.sleep(pause)
+        time.sleep(pause * SLOW_FACTOR)
     return False
 
 def perform_dofus_sequence():
@@ -37,12 +41,12 @@ def perform_dofus_sequence():
     # Press Escape
     print("Pressing Escape...")
     pyautogui.click(x = 2947, y = 517)
-    time.sleep(0.7) # Short delay to ensure the game registers the input
+    time.sleep(0.7 * SLOW_FACTOR) # Short delay to ensure the game registers the input
 
     # Click at X=3813, Y=331 (replaces 'H' press)
     print("Clicking at X=3813, Y=331 (replacing 'H' key)...")
     pyautogui.click(x=3813, y=331)
-    time.sleep(0.6) # breve pausa antes de empezar a comprobar texto
+    time.sleep(0.6 * SLOW_FACTOR) # breve pausa antes de empezar a comprobar texto
 
     # Esperar a leer "Merkasako" en una de las dos regiones (hasta 30 intentos)
     regions_to_check = [
@@ -58,24 +62,24 @@ def perform_dofus_sequence():
     # Click at the first position (from original script)
     print("Clicking at X=1590, Y=1021...")
     pyautogui.click(x=1590, y=1021)
-    time.sleep(2) # Delay after the click
+    time.sleep(2 * SLOW_FACTOR) # Delay after the click
 
     pyautogui.click(x=1370, y=650)
-    time.sleep(1)  # Delay after the click
+    time.sleep(1 * SLOW_FACTOR)  # Delay after the click
 
     # Double click at the second position
     print("Double clicking at X=1490, Y=732...")
     pyautogui.moveTo(x=2150, y=722)
-    time.sleep(1)
-    pyautogui.click(clicks=2, interval=0.1)
-    time.sleep(1)
+    time.sleep(1 * SLOW_FACTOR)
+    pyautogui.click(clicks=2, interval=0.1 * SLOW_FACTOR)
+    time.sleep(1 * SLOW_FACTOR)
     pyautogui.click(x=2630, y=513)
-    time.sleep(2)  # Delay after the click
+    time.sleep(2 * SLOW_FACTOR)  # Delay after the click
 
     # Click at X=3813, Y=331 again (replaces 'H' press)
     print("Clicking at X=3813, Y=331 again (replacing 'H' key)...")
     pyautogui.click(x=3813, y=331)
-    time.sleep(1.2)
+    time.sleep(1.2 * SLOW_FACTOR)
 
     print("Dofus action sequence completed.")
 
@@ -83,6 +87,6 @@ def perform_dofus_sequence():
 if __name__ == "__main__":
     # IMPORTANT: Ensure your Dofus window is active and in focus BEFORE this countdown ends.
     print("Script will start in 5 seconds. Please switch to your Dofus window NOW!")
-    time.sleep(5) # Gives you time to switch to the Dofus window
+    time.sleep(5 * SLOW_FACTOR) # Gives you time to switch to the Dofus window
 
     perform_dofus_sequence()
