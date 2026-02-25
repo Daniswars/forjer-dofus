@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import inspect
 from datetime import datetime
+import random
 
 # Coordenadas de columnas (X) y filas (Y) para las celdas de runas
 COLUMNAS_X = [2054, 2117, 2189]  # X de los 3 huecos (pequeña, media, grande)
@@ -33,7 +34,7 @@ def click(x, y, reason=None):
         pyautogui.click()
     except Exception as e:
         print(f"[CLICK-ERROR] al intentar click en ({x},{y}) reason={reason!r} error={e}")
-    time.sleep(0.1)
+    time.sleep(random.uniform(0.08,0.12))
 
 def ensure_ui_active():
     # presionar Alt brevemente para "desatascar" la UI después de interacciones
@@ -150,8 +151,15 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 x = COLUMNAS_X[0]
             elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
                 x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
                 x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+
+            elif obj in runas_da:
+                if actual + 3 <= maximo and actual < 12:
+                    x = COLUMNAS_X[1]
+                else:
+                    x = COLUMNAS_X[0]
+
             elif obj in runas_potencia or obj in runas_sa:
                 if actual + 10 <= maximo:
                     x = COLUMNAS_X[2]
@@ -206,8 +214,15 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 x = COLUMNAS_X[2] if maximo >= 35 and actual + 10 <= maximo else COLUMNAS_X[1]
             elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
                 x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
                 x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+
+            elif obj in runas_da:
+                if actual + 3 <= maximo and actual < 12:
+                    x = COLUMNAS_X[1]
+                else:
+                    x = COLUMNAS_X[0]
+
             elif obj in runas_vi:
                 x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
             elif obj in runas_ini:
@@ -263,8 +278,15 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 col_x = COLUMNAS_X[0]
             elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
                 col_x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
                 col_x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+
+            elif obj in runas_da:
+                if actual + 3 <= maximo and actual < 12:
+                    x = COLUMNAS_X[1]
+                else:
+                    x = COLUMNAS_X[0]
+
             elif obj in runas_potencia or obj in runas_sa:
                 if actual + 10 <= maximo:
                     col_x = COLUMNAS_X[2]
@@ -320,8 +342,15 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         x = COLUMNAS_X[0]
                     elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
                         x = COLUMNAS_X[0]
-                    elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+                    elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
                         x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+
+                    elif obj in runas_da:
+                        if actual + 3 <= maximo and actual < 12:
+                            x = COLUMNAS_X[1]
+                        else:
+                            x = COLUMNAS_X[0]
+
                     elif obj in runas_potencia or obj in runas_sa:
                         if actual + 10 <= maximo:
                             x = COLUMNAS_X[2]
@@ -408,8 +437,15 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         x = COLUMNAS_X[0]
                     elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
                         x = COLUMNAS_X[0]
-                    elif obj in runas_re or obj in runas_da or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+                    elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
                         x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+
+                    elif obj in runas_da:
+                        if actual + 3 <= maximo and actual < 12:
+                            x = COLUMNAS_X[1]
+                        else:
+                            x = COLUMNAS_X[0]
+
                     elif obj in runas_potencia or obj in runas_sa:
                         if actual + 10 <= maximo:
                             x = COLUMNAS_X[2]
@@ -579,3 +615,4 @@ if __name__ == "__main__":
         stats_obj=stats_db["obj"],
         stats_max=stats_db["max"]
     )
+

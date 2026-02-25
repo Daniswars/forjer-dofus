@@ -25,7 +25,7 @@ STAT_COORDS = [
     (general_x1, 1367, general_x2, 1437),
     (general_x1, 1437, general_x2, 1506),
     (general_x1, 1506, general_x2, 1574),
-    (general_x1, 1574, general_x2-15, 1644),
+    (general_x1, 1574, general_x2, 1644), #noai -15 x2
 ]
 
 ONE_EQUIVALENTS = [
@@ -189,7 +189,7 @@ def _best_numeric_token_from_image(img, config):
         pass
     return 0, "", -100
 
-def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=8, debug_save_folder=None):
+def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=6, debug_save_folder=None):
     """
     Captura única de pantalla + OCR por crop usando paralelismo.
     - Si num_stats se proporciona, solo procesa las primeras num_stats filas de STAT_COORDS.

@@ -273,6 +273,27 @@ ITEM_STATS = {
         "max": [300, 50, 50, 30, 3, 10, 10, 10, 10, 10],
         "obj": ["vi", "sue", "agi", "sa", "cri", "da_agua", "da_aire", "re_aire_por", "es_pa", "da_cri"]
     },
+    "Osanillo": {
+        "min": [286, 45, 4, 2, 9, 9, 9, 9, 6, 2, 2, 2, 2],
+        "max": [300, 50, 4, 2, 10, 10, 10, 10, 15, 2, 2, 2, 2],
+        "obj": ["vi", "pot", "cri", "inv", "da_tierra", "da_fuego", "da_agua", "da_aire", "prospe",
+                "re_tierra_por", "re_fuego_por", "re_agua_por", "re_aire_por"]
+    },
+    "Anillo de Tentenhuevo": {
+        "min": [236, 45, 45, 45, 8, 8, 8, 8, 4, 8, 13],
+        "max": [250, 50, 50, 50, 10, 10, 10, 10, 10, 8, 15],
+        "obj": ["vi", "fo", "sue", "agi", "da_neu", "da_tierra", "da_agua", "da_aire", "prospe", "re_tierra_por", "da_emp"]
+    },
+    "Guante de Psikopomzopato": {
+        "min": [236, 28, 21, 28, 1, 4, 8, 4, 6, 10, 13],
+        "max": [250, 30, 30, 30, 1, 5, 10, 6, 10, 10, 15],
+        "obj": ["vi", "agi", "sa", "pot", "inv", "da", "da_aire", "cu", "prospe", "re_aire_por", "re_emp"]
+    },
+    "Tuerca de Mecanimut": {
+        "min": [286, 21, 6, 1, 8, 8, 8, 8, 6, 10],
+        "max": [300, 30, 6, 1, 10, 10, 10, 10, 10, 10],
+        "obj": ["vi", "sa", "cri", "inv", "da_neu", "da_tierra", "da_fuego", "da_agua", "prospe", "re_agua_por"]
+    },
 }
 
 

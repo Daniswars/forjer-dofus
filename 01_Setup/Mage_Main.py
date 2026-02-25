@@ -228,10 +228,15 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
     target_len = len(item_stats["min"])
     start_time = time.time()
 
+    # nuevos contadores para ratio de error
+    reads_over_max = 0
+    reads_under_min = 0
+
     def _make_result(success, error=None, extra=None):
         """
         Helper para construir el diccionario de retorno con elapsed, attempts y time_per_attempt
         usando shared_state['exo_attempts'] (vía Main.shared_state si existe).
+        Añade además lecturas over/under y ratio_error para diagnóstico.
         """
         elapsed = time.time() - start_time
         attempts_exo = 0
@@ -241,11 +246,19 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
         except Exception:
             attempts_exo = 0
         time_per_attempt = (elapsed / attempts_exo) if attempts_exo > 0 else None
+        # ratio_error: porcentaje reads_over_max / reads_under_min
+        try:
+            ratio_error = (reads_over_max / max(1, reads_under_min)) * 100.0
+        except Exception:
+            ratio_error = None
         res = {
             "success": bool(success),
             "attempts": attempts_exo,
             "elapsed": elapsed,
             "time_per_attempt": time_per_attempt,
+            "reads_over_max": reads_over_max,
+            "reads_under_min": reads_under_min,
+            "ratio_error": ratio_error,
             "error": error
         }
         if extra and isinstance(extra, dict):
@@ -277,13 +290,64 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
 
             print("Current stats:", stats_actuales)
 
-            # Si ya cumplen mínimos -> intentar exo
+            # Si ya cumplen mínimos -> intentar exo PERO primero hacemos una LECTURA RAPIDA previa y comprobamos max
             if stats_within_limits(stats_actuales, item_stats["min"], item_stats["max"]):
-                print("Stats dentro de mínimos -> introducir exo.")
+                print("Stats cumplen mínimos -> lectura previa para verificar máximos antes de EXO.")
                 if not _wait_handle_control(control_events):
                     return _make_result(False, error="stopped_by_user")
 
-                # introducir EXO (la función introducir_exo debe incrementar el contador global en Main.shared_state)
+                # lectura previa (una sola) con el extractor para certificar estado actual
+                try:
+                    fresh_vals, _ = capture_with_retries(attempts=1)
+                    fresh_stats = sanitize_and_align(fresh_vals, target_len)
+                except Exception as e:
+                    print("WARNING: no se pudo realizar lectura previa antes de EXO:", e)
+                    fresh_stats = stats_actuales
+
+                # comprobar si hay stat(s) por encima del máximo
+                any_over = False
+                any_under = False
+                max_list = item_stats.get("max", []) or []
+                min_list = item_stats.get("min", []) or []
+                for i in range(min(target_len, len(fresh_stats))):
+                    val = fresh_stats[i]
+                    # comprobar over max
+                    if i < len(max_list) and max_list[i] is not None:
+                        try:
+                            if max_list[i] < val < 101:
+                                any_over = True
+                        except Exception:
+                            pass
+                    # comprobar under min
+                    try:
+                        if val < min_list[i]:
+                            any_under = True
+                    except Exception:
+                        pass
+
+                # actualizar contadores
+                if any_over:
+                    reads_over_max += 1
+                    print(f"DEBUG: lectura previa muestra stats > max. reads_over_max={reads_over_max}")
+                    # click único en (2107, 781) para señalizar y proceder (no introducir EXO)
+                    try:
+                        print("DEBUG: realizando click en (2107, 781) por exceso antes de intentar reducir/continuar.")
+                        pyautogui.moveTo(2107, 781, duration=0.05)
+                        pyautogui.click()
+                        time.sleep(0.06)
+                        ensure_ui_active()
+                    except Exception as e:
+                        print("WARNING: no se pudo realizar click en (2107,781):", e)
+                    # no introducir exo si hay exceso; continuar loop para intentar corrección en próximas iteraciones
+                    continue
+
+                if any_under:
+                    reads_under_min += 1
+                    print(f"DEBUG: lectura previa muestra stats < min. reads_under_min={reads_under_min}. No se puede introducir EXO.")
+                    # no introducir exo porque alguna stat está por debajo del mínimo
+                    continue
+
+                # si llegamos aquí -> todas las stats están entre min y max: introducir exo
                 try:
                     Mage_Introduce_Exo_mod.introducir_exo()
                 except Exception:
