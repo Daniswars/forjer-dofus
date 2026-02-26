@@ -34,7 +34,7 @@ def click(x, y, reason=None):
         pyautogui.click()
     except Exception as e:
         print(f"[CLICK-ERROR] al intentar click en ({x},{y}) reason={reason!r} error={e}")
-    time.sleep(random.uniform(0.08,0.12))
+    time.sleep(random.uniform(0.06,0.1))
 
 def ensure_ui_active():
     # presionar Alt brevemente para "desatascar" la UI después de interacciones
@@ -155,7 +155,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
             elif obj in runas_da:
-                if actual + 3 <= maximo and actual < 12:
+                if actual + 3 <= maximo and actual > 12:
                     x = COLUMNAS_X[1]
                 else:
                     x = COLUMNAS_X[0]
@@ -218,7 +218,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
             elif obj in runas_da:
-                if actual + 3 <= maximo and actual < 12:
+                if actual + 3 <= maximo and actual > 12:
                     x = COLUMNAS_X[1]
                 else:
                     x = COLUMNAS_X[0]
@@ -282,7 +282,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 col_x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
             elif obj in runas_da:
-                if actual + 3 <= maximo and actual < 12:
+                if actual + 3 <= maximo and actual > 12:
                     x = COLUMNAS_X[1]
                 else:
                     x = COLUMNAS_X[0]
@@ -346,7 +346,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
                     elif obj in runas_da:
-                        if actual + 3 <= maximo and actual < 12:
+                        if actual + 3 <= maximo and actual > 12:
                             x = COLUMNAS_X[1]
                         else:
                             x = COLUMNAS_X[0]
@@ -441,7 +441,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                         x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
                     elif obj in runas_da:
-                        if actual + 3 <= maximo and actual < 12:
+                        if actual + 3 <= maximo and actual > 12:
                             x = COLUMNAS_X[1]
                         else:
                             x = COLUMNAS_X[0]
@@ -590,7 +590,11 @@ if __name__ == "__main__":
     time.sleep(0.3)
 
     # Primera captura: usar reintentos y saneamiento de la primera fila problemática
-    valores_actuales, texto_ocr = capture_with_retries(Mage_Data_Extractor.capture_and_read_stats, attempts=3, wait_between=0.5)
+    # MODIFICADO: pasar stats_db al extractor usando lambda para capture_with_retries
+    def capture_func():
+        return Mage_Data_Extractor.capture_and_read_stats(item_stats=stats_db)
+
+    valores_actuales, texto_ocr = capture_with_retries(capture_func, attempts=3, wait_between=0.5)
     # si la primera lectura suele fallar en la primera fila, sanearla aquí
     valores_actuales = sanitize_initial_values(valores_actuales, len(stats_db["min"]))
 
@@ -615,4 +619,3 @@ if __name__ == "__main__":
         stats_obj=stats_db["obj"],
         stats_max=stats_db["max"]
     )
-

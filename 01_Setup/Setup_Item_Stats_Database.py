@@ -195,10 +195,10 @@ ITEM_STATS = {
     },
     "Anillo inestable": {
         "min": [186, 40, 3, 3, 3, 3, 3, 11, 8, 31],
-        "max": [200, 50, 5, 5, 5, 5, 5, 15, 12, 40],
+        "max": [200, 50, 4, 4, 4, 4, 4, 15, 12, 40],
         "obj": ["vi", "sa", "re_neu", "re_tierra", "re_fuego", "re_agua", "re_aire", "hui", "es_pm", "re_emp"]
     },
-    "Anillo del rey jugador": {
+    "Sello del rey jugador": {
         "min": [236, 45, 45, 21, 3, 1, 11, 11, 11, 6, 10, 4],
         "max": [250, 50, 50, 40, 3, 1, 11, 11, 11, 10, 10, 6],
         "obj": ["vi", "fo", "inte", "sa", "cri", "al", "da_neu", "da_tierra", "da_fuego", "prospe", "re_fuego_por", "ret_pm"]
@@ -294,6 +294,16 @@ ITEM_STATS = {
         "max": [300, 30, 6, 1, 10, 10, 10, 10, 10, 10],
         "obj": ["vi", "sa", "cri", "inv", "da_neu", "da_tierra", "da_fuego", "da_agua", "prospe", "re_agua_por"]
     },
+    "Anillo de maxilubo": {
+        "min": [86, 38, 28, 1, 4, 6, 101, 7, 3],
+        "max": [100, 40, 30, 1, 4, 15, 200, 7, 6],
+        "obj": ["vi", "fo", "agi", "al", "da", "prospe", "ini", "re_fuego_por", "re_neu"]
+    },
+    "Anillo de Kumijo": {
+        "min": [186, 48, 16, 3, 1, 8, 5, 7, 7, 7],
+        "max": [200, 50, 25, 3, 1, 10, 5, 10, 10, 10],
+        "obj": ["vi", "inte", "sa", "cri", "al", "da_fuego", "re_agua_por", "re_tierra", "re_agua", "re_emp"]
+    },
 }
 
 
@@ -320,6 +330,16 @@ def get_item_stats(name: str):
         if lname in key.lower():
             return val
     return None
+
+
+def get_item_max(name: str):
+    """
+    Conveniencia: devuelve la lista 'max' para el item o None si no existe.
+    """
+    s = get_item_stats(name)
+    if not s:
+        return None
+    return s.get("max")
 
 
 def list_items():

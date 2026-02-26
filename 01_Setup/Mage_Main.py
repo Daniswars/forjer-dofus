@@ -39,15 +39,16 @@ def stats_within_limits(stats_actuales, stats_min, stats_max):
     return True
 
 # --- Nuevas helpers: reintentos y normalización de lecturas ---
-def capture_with_retries(attempts=2, wait_between=0.06):
+def capture_with_retries(attempts=2, wait_between=0.06, item_stats=None):
     """
     Reintentos rápidos de OCR. Acepta lecturas estables (dos iguales) o una lectura final.
     Valores por defecto reducidos para acelerar el flujo.
+    NUEVO: acepta item_stats opcional para pasarlo al extractor.
     """
     last_vals, last_text = None, ""
     for attempt in range(1, attempts + 1):
         start = time.time()
-        valores, texto = capture_and_read_stats()
+        valores, texto = capture_and_read_stats(item_stats=item_stats)
         elapsed = time.time() - start
         suma = sum(valores) if valores else 0
         nonzeros = sum(1 for v in (valores or []) if v != 0)
@@ -272,7 +273,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 return _make_result(False, error="stopped_by_user")
 
             # ---------- UNA SÓLA CAPTURA RÁPIDA antes de decidir ----------
-            valores, _ = capture_and_read_stats()
+            valores, _ = capture_and_read_stats(item_stats=item_stats)
             stats_actuales = sanitize_and_align(valores, target_len)
 
             # si la captura única salió vacía, reintentar UNA VEZ rápida; no más
@@ -280,7 +281,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 print("OCR vacío en captura única. Reintentando rápido una vez...")
                 ensure_ui_active()
                 time.sleep(0.06)
-                valores2, _ = capture_and_read_stats()
+                valores2, _ = capture_and_read_stats(item_stats=item_stats)
                 stats_actuales = sanitize_and_align(valores2, target_len)
                 if not stats_actuales or sum(stats_actuales) == 0:
                     print("Persisten lecturas vacías tras reintento: omitiendo iteración.")
@@ -298,7 +299,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
 
                 # lectura previa (una sola) con el extractor para certificar estado actual
                 try:
-                    fresh_vals, _ = capture_with_retries(attempts=1)
+                    fresh_vals, _ = capture_with_retries(attempts=1, item_stats=item_stats)
                     fresh_stats = sanitize_and_align(fresh_vals, target_len)
                 except Exception as e:
                     print("WARNING: no se pudo realizar lectura previa antes de EXO:", e)
@@ -441,7 +442,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 return _make_result(False, error="stopped_by_user")
 
             time.sleep(0.05)
-            stats_nuevos, _ = capture_and_read_stats()
+            stats_nuevos, _ = capture_and_read_stats(item_stats=item_stats)
             stats_nuevos = sanitize_and_align(stats_nuevos, target_len)
 
             print(f"Post-runas stats: {stats_nuevos}")

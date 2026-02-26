@@ -189,12 +189,16 @@ def _best_numeric_token_from_image(img, config):
         pass
     return 0, "", -100
 
-def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=6, debug_save_folder=None):
+def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=6, debug_save_folder=None, item_stats=None):
     """
     Captura única de pantalla + OCR por crop usando paralelismo.
     - Si num_stats se proporciona, solo procesa las primeras num_stats filas de STAT_COORDS.
     - workers: número de hilos para ThreadPoolExecutor.
     - debug_save_folder: si se proporciona, guardará cada crop original y procesado para depuración.
+    - item_stats: opcional, puede ser:
+        * None -> comportamiento antiguo
+        * dict con clave 'max' -> se usará esa lista como máximos por fila
+        * lista de máximos directamente
     - Preprocesado aplicado a imagen completa (una vez).
     - OCR escalonado por crop: 1) digits-only psm7, 2) digits-only psm6, 3) general psm6.
     Devuelve (numbers:list[int], raw_texts:list[str]) y hace print con los valores leídos.
@@ -206,6 +210,27 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
     coords = STAT_COORDS if num_stats is None else STAT_COORDS[:max(0, int(num_stats))]
     if not coords:
         return [], []
+
+    # Determinar listas de máximos/minimos si se pasó item_stats
+    max_list = None
+    min_list = None
+    try:
+        if item_stats is None:
+            max_list = None
+            min_list = None
+        elif isinstance(item_stats, dict):
+            max_list = item_stats.get("max")
+            min_list = item_stats.get("min")
+        elif isinstance(item_stats, (list, tuple)):
+            # si nos pasan directamente una lista se interpreta como máximos
+            max_list = list(item_stats)
+            min_list = None
+        else:
+            max_list = getattr(item_stats, "max", None)
+            min_list = getattr(item_stats, "min", None)
+    except Exception:
+        max_list = None
+        min_list = None
 
     # bounding box sobre coords usados
     min_x = min(x1 for (x1, y1, x2, y2) in coords)
@@ -342,6 +367,41 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
         numbers.append(num)
         raw_texts.append(txt_clean)
 
+    # NUEVA REGLA: si existe min_list y el valor leído es > 2 * minv,
+    # recortar exactamente UN dígito por la derecha del texto OCR (no iterativo).
+    if min_list:
+        for i in range(min(len(numbers), len(coords))):
+            try:
+                minv = None
+                if i < len(min_list):
+                    try:
+                        minv = int(min_list[i])
+                    except Exception:
+                        minv = None
+                # si no hay mínimo definido, no intentamos recorte por mínimos
+                if not minv or minv <= 0:
+                    continue
+                num = numbers[i] or 0
+                txt = (raw_texts[i] or str(num))
+                # extraer dígitos detectados en el OCR
+                digits = "".join(re.findall(r'\d', txt)) or str(num)
+                original_digits = digits
+
+                # Si el número leído es mayor que 2 * minv, asumimos un dígito extra final:
+                # recortamos solamente el último carácter (no iterativo).
+                if num > 2 * minv and len(digits) > 1:
+                    new_digits = digits[:-1]
+                    try:
+                        new_val = int(new_digits)
+                        numbers[i] = new_val
+                        raw_texts[i] = new_digits
+                        print(f"[ADJUST-MIN] fila {i+1}: OCR='{original_digits}' ajustado a '{raw_texts[i]}' por 2*min={2*minv}")
+                    except Exception:
+                        # si no podemos convertir, no hacemos cambio
+                        print(f"[ADJUST-MIN] fila {i+1}: OCR='{original_digits}' detectado >2*min={2*minv} pero no se pudo convertir tras recorte")
+            except Exception:
+                continue
+
     elapsed = time.time() - start_time
     # prints de depuración: valores y textos leídos
     print(f"Tiempo captura+OCR: {elapsed:.2f}s - nonzeros: {sum(1 for v in numbers if v!=0)}")
@@ -355,11 +415,33 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
 
 if __name__ == "__main__":
     print("Preparando captura de stats individuales (debug mode: guarda crops)...")
+
+    # Stats de prueba: Anillo inestable
+    test_item_stats = {
+        "min": [186, 40, 3, 3, 3, 3, 3, 11, 8, 31],
+        "max": [200, 50, 4, 4, 4, 4, 4, 15, 12, 40],
+        "obj": ["vi", "sa", "re_neu", "re_tierra", "re_fuego", "re_agua", "re_aire", "hui", "es_pm", "re_emp"]
+    }
+
     try:
-        # sólo procesa las primeras N stats si quieres probar rápido; usa None para todas
-        nums, raws = capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=8, debug_save_folder="debug_crops")
-        print("Resultado final:", nums)
+        # Pasar item_stats para que aplique la regla de recorte por 2*min
+        nums, raws = capture_and_read_stats(
+            save_folder=None,
+            lang='spa',
+            num_stats=None,
+            workers=8,
+            debug_save_folder="debug_crops",
+            item_stats=test_item_stats
+        )
+        print("\n=== RESULTADO FINAL ===")
+        print("Números extraídos:", nums)
+        print("\nComparación con stats esperadas:")
+        print(f"  Min esperado: {test_item_stats['min']}")
+        print(f"  Max esperado: {test_item_stats['max']}")
+        print(f"  Atributos:    {test_item_stats['obj']}")
     except KeyboardInterrupt:
-        print("Interrupción por usuario.")
+        print("\nInterrupción por usuario.")
     except Exception as exc:
-        print("Error:", exc)
+        print(f"\nError: {exc}")
+        import traceback
+        traceback.print_exc()
