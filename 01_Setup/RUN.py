@@ -10,6 +10,11 @@ try:
     import Setup_Item_Stats_Database
     from Mage_Main import mage_main
     import Main_Save_Data as DataSaver
+    # NUEVO: importar helper de reseteo de sesión
+    try:
+        import Aux_Resetear_sesion as SessionReset
+    except Exception:
+        SessionReset = None
 except Exception as e:
     # si hay problemas de path, intentar ajustar
     import sys
@@ -23,6 +28,11 @@ except Exception as e:
     except Exception:
         DataSaver = None
         print("WARNING: Main_Save_Data no importable:", e)
+    # NUEVO: intentar importar el helper de reseteo también en el fallback
+    try:
+        import Aux_Resetear_sesion as SessionReset
+    except Exception:
+        SessionReset = None
 
 # Control events para pausar / detener
 class ControlEvents:
@@ -193,8 +203,44 @@ def run_process(control_events, status_var, start_btn, stop_btn):
     except Exception as e:
         print("WARNING: install_monkeypatches falló:", e)
 
+    # INICIALIZAR temporizador de reseteo de sesión (30 minutos)
+    last_session_reset_time = time.time()
+    SESSION_RESET_INTERVAL = 30 * 60  # 30 minutos
+
     # Bucle principal: repetir mientras no se solicite stop
     while not control_events.stop_event.is_set():
+        # --- NUEVO: Comprobar si ha pasado el intervalo de 30 minutos para resetear sesión ---
+        try:
+            elapsed_since_reset = time.time() - last_session_reset_time
+            if elapsed_since_reset >= SESSION_RESET_INTERVAL:
+                status_var.set("Reseteando sesión (30m)...")
+                log(f"Tiempo de ejecución >=30min ({int(elapsed_since_reset)}s). Realizando reseteo de sesión.")
+                # intentar resetear sesión solo si tenemos el módulo disponible
+                try:
+                    if SessionReset is not None and hasattr(SessionReset, "restart_dofus_and_click_forge"):
+                        # pasar el nombre del item actual si está disponible
+                        current_item = shared_state.get("current_item", "") or ""
+                        ok = SessionReset.restart_dofus_and_click_forge(current_item)
+                        if ok:
+                            log("Reseteo de sesión realizado correctamente.")
+                        else:
+                            log("Reseteo de sesión intentado pero falló (ver salida).")
+                    else:
+                        log("SessionReset no disponible: no se puede resetear sesión automáticamente.")
+                except Exception as e:
+                    log(f"ERROR durante reseteo de sesión: {e}")
+                # Resetar contadores y timmer
+                shared_state["exo_attempts"] = 0
+                shared_state["rune_clicks"] = 0
+                last_session_reset_time = time.time()
+                status_var.set("Sesión reseteada. Reintentando Setup...")
+                # pequeña espera para estabilizar ventanas antes de volver a setup
+                time.sleep(1.0)
+                continue
+        except Exception as e:
+            print("WARNING: fallo comprobando/ejecutando session reset:", e)
+
+        # --- Resto del bucle existente (Setup, Mage_Main, etc.) ---
         status_var.set("Preparando Setup...")
         try:
             # 1) Setup: obtener item_name y stats

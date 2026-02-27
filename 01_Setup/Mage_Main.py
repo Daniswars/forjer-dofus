@@ -7,6 +7,7 @@ from Mage_Introduce_Runes import mage_introduce_runes
 import Mage_Introduce_Exo as Mage_Introduce_Exo_mod
 from Mage_Exo_Verify import verify_success
 import Extra_Correo as Correo
+import Aux_Forjamagia_imposible as AuxForja
 
 # Coordenadas del área de lectura: (x1,y1) -> (x2,y2)
 X1, Y1 = 1512, 761
@@ -451,6 +452,41 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 no_progress_count += 1
                 print(f"No progress ({no_progress_count}/{no_progress_limit})")
                 if no_progress_count >= no_progress_limit:
+                    try:
+                        # Nueva lógica: comprobar si aparece "Forjamagia imposible"
+                        found_impossible = False
+                        if AuxForja is not None:
+                            try:
+                                found_impossible, dbg_texts = AuxForja.forjamagia_impossible_at_points(
+                                    points=[(1788, 1050), (2048, 1087)],
+                                    region_size=(600, 120),
+                                    lang='spa',
+                                    debug_save_folder=None,
+                                    save_prefix=None
+                                )
+                            except Exception as e:
+                                print("WARNING: fallo al ejecutar AuxForja.forjamagia_impossible_at_points:", e)
+                                found_impossible = False
+
+                        if found_impossible:
+                            print("DEBUG: 'Forjamagia imposible' detectado -> click en (1930,1143) y reinicio del contador.")
+                            try:
+                                pyautogui.moveTo(1930, 1143, duration=0.05)
+                                pyautogui.click()
+                                time.sleep(0.08)
+                                ensure_ui_active()
+                            except Exception as e:
+                                print("WARNING: no se pudo hacer click en (1930,1143):", e)
+                            # resetear estado para reintentar el bucle normal
+                            no_progress_count = 0
+                            prev_stats = None
+                            time.sleep(0.06)
+                            continue
+
+                    except Exception:
+                        pass
+
+                    # Si no se detectó "Forjamagia imposible" o Aux no disponible -> comportamiento original
                     try:
                         Correo.send_mail(item_name, "Sin runas")
                     except Exception:

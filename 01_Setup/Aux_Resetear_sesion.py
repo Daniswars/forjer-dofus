@@ -181,28 +181,31 @@ def pre_check_game_status_with_timeout() -> bool:
 
 def restart_dofus_and_click_forge(objeto_seleccionado: str):
     """
-    Automates the process of restarting Dofus and clicking a forge table,
-    followed by adding object, setting resource menu, and sorting.
-    The workbench selection is dynamic based on `objeto_seleccionado`.
+    REWORKED: Solo reinicia la sesión del cliente:
+    - cierra la ventana del juego si está abierta,
+    - hace click en 'Play' del launcher,
+    - selecciona el personaje (click en CHARACTER_PLAY_BUTTON_COORD),
+    - espera la carga y verifica (pre_check_game_status_with_timeout).
+    NO realiza ninguna acción de workbench ni coloca objetos.
     """
-    print("--- Starting Dofus Restart and Forge Click Automation ---")
-    print(f"Selected object for magueo: '{objeto_seleccionado}'")
+    print("--- Starting Dofus session reset (no workbench actions) ---")
+    print(f"Ignoring objeto_seleccionado='{objeto_seleccionado}' for session reset.")
 
     global DOFUS_WINDOW_TITLE
 
-    # 1. Close Dofus if it's already open
-    current_dofus_title = find_dofus_window_title()
-    if current_dofus_title:
-        DOFUS_WINDOW_TITLE = current_dofus_title
-        if not close_dofus_window(DOFUS_WINDOW_TITLE):
-            print("Failed to close Dofus window. Automation stopped.")
-            return False
-    else:
-        print("Dofus window not found at the start. Assuming it's closed, proceeding to launch from Ankama Launcher.")
-
-    # 2. Open Launcher and click "Play" to start the game
-    print(f"Looking for Dofus Launcher window: '{DOFUS_LAUNCHER_TITLE}'...")
     try:
+        # 1. Close Dofus if it's already open
+        current_dofus_title = find_dofus_window_title()
+        if current_dofus_title:
+            DOFUS_WINDOW_TITLE = current_dofus_title
+            if not close_dofus_window(DOFUS_WINDOW_TITLE):
+                print("Failed to close Dofus window. Session reset aborted.")
+                return False
+        else:
+            print("Dofus window not found at the start. Proceeding to launcher.")
+
+        # 2. Open Launcher and click "Play" to start the game
+        print(f"Looking for Dofus Launcher window: '{DOFUS_LAUNCHER_TITLE}'...")
         launcher_windows = gw.getWindowsWithTitle(DOFUS_LAUNCHER_TITLE)
         if not launcher_windows:
             print(f"Error: Dofus Launcher window '{DOFUS_LAUNCHER_TITLE}' not found. Please open it manually.")
@@ -216,130 +219,44 @@ def restart_dofus_and_click_forge(objeto_seleccionado: str):
 
         print(f"Clicking launcher play button at {LAUNCHER_PLAY_BUTTON_COORD}...")
         pyautogui.click(LAUNCHER_PLAY_BUTTON_COORD[0], LAUNCHER_PLAY_BUTTON_COORD[1])
-        time.sleep(15)  # Wait for the game client to load
-        print("Waited 15 seconds for game client to load.")
+        # Esperar lo suficiente para que el cliente aparezca
+        time.sleep(15)
+        print("Clicked Play and waited for the game client to load (15s).")
 
-        # 3. Click "Jugar" on the character selection screen
+        # 3. Click "Jugar" en la pantalla de selección de personaje
         print(f"Clicking character play button at {CHARACTER_PLAY_BUTTON_COORD}...")
         pyautogui.click(CHARACTER_PLAY_BUTTON_COORD[0], CHARACTER_PLAY_BUTTON_COORD[1])
-        time.sleep(10)  # Wait for the game to fully load after character selection
-        print("Waited 10 seconds for character to log in.")
+        time.sleep(10)  # Esperar a que el personaje entre en el mundo
+        print("Clicked character Play and waited (10s).")
 
-        # 4. Verify game loaded by reading "Brakmar" with timeout
+        # 4. Verificar que el juego haya terminado de cargar (ej. detectando 'Brakmar')
         if not pre_check_game_status_with_timeout():
-            print("Failed to confirm game loaded within timeout. Automation stopped.")
+            print("Failed to confirm game loaded within timeout. Session reset incomplete.")
             return False
 
-        objeto_lower = objeto_seleccionado.lower()
-        print(f"Object name in lowercase for check: '{objeto_lower}'")
-
-        # Dynamic workbench selection based on the object type
-        if "anillo" in objeto_lower or "amuleto" in objeto_lower:
-            print(f"'{objeto_seleccionado}' detected. Using Ring/Amulet workbench.")
-            # Double click to add object to workbench
-            print(f"Moving mouse to {WORKBENCH_RING_AMULET_COORD} for double-clicking...")
-            pyautogui.moveTo(WORKBENCH_RING_AMULET_COORD[0], WORKBENCH_RING_AMULET_COORD[1])
-            time.sleep(3)  # Small pause after moving mouse
-            print("Performing custom double click...")
-            pyautogui.click(clicks=2, interval=0.1)  # Custom double click
-            time.sleep(3)  # Pause after double click
-
-        elif "escudo" in objeto_lower:
-            print(f"'{objeto_seleccionado}' detected. Using Shield workbench.")
-            # Click 1 for shield workbench
-            print(f"Clicking Shield workbench first point at {WORKBENCH_SHIELD_CLICK_1}...")
-            pyautogui.click(WORKBENCH_SHIELD_CLICK_1[0], WORKBENCH_SHIELD_CLICK_1[1])
-            time.sleep(3)  # Delay for character to move/interface to update
-
-            # Click 2 for shield workbench
-            print(f"Clicking Shield workbench second point at {WORKBENCH_SHIELD_CLICK_2}...")
-            pyautogui.click(WORKBENCH_SHIELD_CLICK_2[0], WORKBENCH_SHIELD_CLICK_2[1])
-            time.sleep(2)  # Pause after click
-
-
-        elif "capa" in objeto_lower or "sombrero" in objeto_lower:
-            print(f"'{objeto_seleccionado}' detected. Using Cape/Hat workbench.")
-            # Click for cape/hat workbench
-            print(f"Clicking Cape/Hat workbench at {WORKBENCH_CAPE_HAT_COORD}...")
-            pyautogui.click(WORKBENCH_CAPE_HAT_COORD[0], WORKBENCH_CAPE_HAT_COORD[1])
-            time.sleep(0.8)  # Pause after click
-
-        else:
-            print(f"Warning: Unknown object type '{objeto_seleccionado}'. Defaulting to Ring/Amulet workbench.")
-            # Default to ring/amulet if type is not recognized
-            print(f"Moving mouse to {WORKBENCH_RING_AMULET_COORD} for double-clicking...")
-            pyautogui.moveTo(WORKBENCH_RING_AMULET_COORD[0], WORKBENCH_RING_AMULET_COORD[1])
-            time.sleep(0.2)
-            print("Performing custom double click...")
-            pyautogui.click(clicks=2, interval=0.1)
-            time.sleep(0.8)
-
-        # --- Subsequent actions (common for all types) ---
-        # These actions are performed regardless of which workbench was selected
-
-        # 1 Introduce item in workbench
-        print("Placing object on workbench...")
-        # Step 1: Click at (2352, 667)
-        pyautogui.click(PLACE_OBJECT_CLICK_1_COORD)
-        time.sleep(0.5)
-
-        # Step 2: Double-click at (2473, 732)
-        pyautogui.moveTo(PLACE_OBJECT_CLICK_2_COORD[0], PLACE_OBJECT_CLICK_2_COORD[1])
-        time.sleep(0.5)
-        print("Performing custom double click...")
-        pyautogui.click(clicks=2, interval=0.1)
-        time.sleep(0.8)
-
-        # 2. Click for resource menu
-        print(f"Clicking resource menu at {RESOURCE_MENU_CLICK_COORD}...")
-        pyautogui.click(RESOURCE_MENU_CLICK_COORD[0], RESOURCE_MENU_CLICK_COORD[1])
-        time.sleep(0.5)  # Short pause after click
-
-        # 3. Click for order dropdown
-        print(f"Clicking order dropdown at {ORDER_DROPDOWN_CLICK_COORD}...")
-        pyautogui.click(ORDER_DROPDOWN_CLICK_COORD[0], ORDER_DROPDOWN_CLICK_COORD[1])
-        time.sleep(0.5)  # Short pause after click to ensure dropdown appears
-
-        # 4. Scroll down
-        print(f"Moving mouse to {SCROLL_MOUSE_POS_COORD} for scrolling...")
-        pyautogui.moveTo(SCROLL_MOUSE_POS_COORD[0], SCROLL_MOUSE_POS_COORD[1])
-        time.sleep(0.5)  # Pause for mouse to move
-        print("Scrolling down...")
-        pyautogui.scroll(-500)  # Scroll down by 500 units (adjust as needed)
-        time.sleep(1)  # Pause after scroll to ensure menu updates
-
-        # 5. Click to sort by level
-        print(f"Clicking to sort by level at {SORT_BY_LEVEL_CLICK_COORD}...")
-        pyautogui.click(SORT_BY_LEVEL_CLICK_COORD[0], SORT_BY_LEVEL_CLICK_COORD[1])
-        time.sleep(1)  # Pause after click to ensure sort applies
-
-        print("--- Dofus Restart and Forge Click Automation Finished ---")
+        print("--- Session reset completed successfully (no workbench actions performed) ---")
         return True
 
     except gw.PyGetWindowException as e:
         print(
-            f"PyGetWindow error: {e}. Make sure the Dofus game and launcher windows are running with the correct titles.")
+            f"PyGetWindow error: {e}. Asegúrate de que el launcher y el cliente estén abiertos con los títulos correctos.")
         return False
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred during session reset: {e}")
         return False
 
 
 # --- Example Usage (for testing the module directly) ---
 if __name__ == "__main__":
     # Create a debug captures directory if it doesn't exist
-    if not os.path.exists("debug_captures"):
-        os.makedirs("debug_captures")
+    if not os.path.exists("../debug_captures"):
+        os.makedirs("../debug_captures")
 
-    print("\n--- Running Dofus Restart Module Test ---")
-    print("Please ensure Dofus and its launcher are visible on screen for testing.")
-    print("The script will attempt to close Dofus, restart it via the launcher,")
-    print("verify the game loads, and then click a forge table and perform subsequent actions.")
-
-    # Test with a Shield
-    print("\n--- Testing with 'Escudo Volante' (should use shield workbench) ---")
-    success_shield = restart_dofus_and_click_forge("Escudo Volante")
-    if success_shield:
-        print("\nAutomation sequence for Escudo completed successfully.")
+    print("\n--- Running Dofus Session Reset Module Test ---")
+    print("Este test solo reiniciará la sesión: cerrará el cliente, pulsará Play en el launcher")
+    print("y seleccionará el personaje. NO realizará acciones de workbench.")
+    success = restart_dofus_and_click_forge("IGNORED_PARA_RESET")
+    if success:
+        print("\nSession reset completed successfully.")
     else:
-        print("\nAutomation sequence for Escudo failed or encountered an issue.")
+        print("\nSession reset failed or encountered an issue.")

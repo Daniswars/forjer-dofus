@@ -13,7 +13,7 @@ import Database
 import Interfaz_magueo
 import pygetwindow as gw
 import pytesseract
-import resetear_sesion
+import Aux_Resetear_sesion
 import Cambio_objeto
 import Guardar_exito
 
