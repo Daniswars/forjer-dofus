@@ -2,10 +2,12 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
+import customtkinter as ctk
 
 # Importar módulos locales
 try:
     import Main_Setup
+    import Setup_Item_Stats_Database
     from Mage_Main import mage_main
     import Main_Save_Data as DataSaver
 except Exception as e:
@@ -14,6 +16,7 @@ except Exception as e:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
     import Main_Setup
+    import Setup_Item_Stats_Database
     from Mage_Main import mage_main
     try:
         import Main_Save_Data as DataSaver
@@ -166,16 +169,16 @@ def run_process(control_events, status_var, start_btn, stop_btn):
     """
     def ui_set_start_disabled():
         try:
-            start_btn.config(state="disabled")
-            stop_btn.config(state="normal")
+            start_btn.configure(state="disabled")
+            stop_btn.configure(state="normal")
         except Exception:
             pass
 
     def ui_set_final_state():
         try:
             status_var.set("Idle")
-            start_btn.config(state="normal")
-            stop_btn.config(state="disabled")
+            start_btn.configure(state="normal")
+            stop_btn.configure(state="disabled")
         except Exception:
             pass
 
@@ -394,65 +397,198 @@ def run_process(control_events, status_var, start_btn, stop_btn):
 def build_ui():
     import tkinter.ttk as ttk
 
-    root = tk.Tk()
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("blue")
+    root = ctk.CTk()
     root.title("Forjamagia - Orquestador")
-    root.geometry("540x300")
-    root.resizable(False, False)
+    root.geometry("760x480")
+    root.resizable(True, True)
 
-    style = ttk.Style(root)
-    # Intentar tema moderno; si no está, usar default y ajustar colores
-    try:
-        style.theme_use('clam')
-    except Exception:
-        pass
-
-    # Paleta oscura
-    BG = "#1f1f1f"
     FG = "#e6e6e6"
-    ACCENT = "#4a90e2"
-    BTN_BG = "#2b2b2b"
-    root.configure(bg=BG)
 
-    frame_top = ttk.Frame(root, padding=(12, 10))
-    frame_top.pack(fill="x")
-    frame_top.configure(style="My.TFrame")
+    frame_top = ctk.CTkFrame(root, corner_radius=8)
+    frame_top.pack(fill="x", padx=12, pady=10)
 
-    title = ttk.Label(frame_top, text="Forjamagia - Orquestador", font=("Segoe UI", 14, "bold"), foreground=FG, background=BG)
-    title.pack(anchor="w")
+    title = ctk.CTkLabel(frame_top, text="Forjamagia - Orquestador", font=("Segoe UI", 18, "bold"))
+    title.pack(anchor="w", padx=10, pady=(8, 0))
 
     status_var = tk.StringVar(value="Idle")
-    status_lbl = ttk.Label(frame_top, textvariable=status_var, font=("Segoe UI", 11), foreground=FG, background=BG)
-    status_lbl.pack(anchor="w", pady=(6, 0))
+    status_lbl = ctk.CTkLabel(frame_top, textvariable=status_var, font=("Segoe UI", 13))
+    status_lbl.pack(anchor="w", padx=10, pady=(6, 8))
 
-    frame_controls = ttk.Frame(root, padding=(12, 8))
-    frame_controls.pack(fill="x")
+    frame_controls = ctk.CTkFrame(root, corner_radius=8)
+    frame_controls.pack(fill="x", padx=12)
 
     control_events = ControlEvents()
-    control_events.pause_event.set()  # empezar en estado running
+    control_events.pause_event.set()
 
     # Log area
-    frame_log = ttk.LabelFrame(root, text="Log", padding=(8, 8))
-    frame_log.pack(fill="both", expand=True, padx=12, pady=(6,12))
-    # aplicar estilos oscuros al Text
-    log_text = tk.Text(frame_log, height=8, wrap="word", bg="#0f0f0f", fg=FG, insertbackground=FG)
-    log_text.pack(fill="both", expand=True)
+    frame_log = ctk.CTkFrame(root, corner_radius=8)
+    frame_log.pack(fill="both", expand=True, padx=12, pady=(8, 12))
+    log_text = ctk.CTkTextbox(frame_log, height=200)
+    log_text.pack(fill="both", expand=True, padx=8, pady=8)
 
     def log(msg):
         ts = time.strftime("%H:%M:%S")
         entry = f"[{ts}] {msg}\n"
-        log_text.config(state="normal")
+        log_text.configure(state="normal")
         log_text.insert("end", entry)
         log_text.see("end")
-        log_text.config(state="disabled")
+        log_text.configure(state="disabled")
 
-    # Buttons (crearlos primero sin comando y luego asignar)
-    start_btn = ttk.Button(frame_controls, text="Iniciar", width=14)
-    pause_btn = ttk.Button(frame_controls, text="Pausar (F9)", width=16)
-    stop_btn = ttk.Button(frame_controls, text="Parar y Guardar (F10)", width=18, state="disabled")
+    start_btn = ctk.CTkButton(frame_controls, text="Iniciar", width=160, height=36, font=("Segoe UI", 12))
+    pause_btn = ctk.CTkButton(frame_controls, text="Pausar (F9)", width=170, height=36, font=("Segoe UI", 12))
+    stop_btn = ctk.CTkButton(frame_controls, text="Parar y Guardar (F10)", width=210, height=36, font=("Segoe UI", 12))
+    stop_btn.configure(state="disabled")
 
-    start_btn.grid(row=0, column=0, padx=8, pady=6)
-    pause_btn.grid(row=0, column=1, padx=8, pady=6)
-    stop_btn.grid(row=0, column=2, padx=8, pady=6)
+    start_btn.grid(row=0, column=0, padx=10, pady=14)
+    pause_btn.grid(row=0, column=1, padx=10, pady=14)
+    stop_btn.grid(row=0, column=2, padx=10, pady=14)
+
+    def open_db_editor():
+        # Editor sencillo: búsqueda + lista de items + subir/bajar stats + guardar
+        stats_db = Setup_Item_Stats_Database.load_item_stats_txt()
+        if not isinstance(stats_db, dict):
+            stats_db = {}
+
+        editor = ctk.CTkToplevel(root)
+        editor.title("Editor de Item Stats (TXT)")
+        editor.geometry("760x420")
+        editor.grab_set()
+
+        top = ctk.CTkFrame(editor)
+        top.pack(fill="x", padx=12, pady=10)
+        ctk.CTkLabel(top, text="Buscar:").pack(side="left", padx=(6, 6))
+        search_var = tk.StringVar()
+        search_entry = ctk.CTkEntry(top, textvariable=search_var, width=200)
+        search_entry.pack(side="left")
+
+        body = ctk.CTkFrame(editor)
+        body.pack(fill="both", expand=True, padx=12, pady=6)
+
+        # Lista de items
+        items_list = tk.Listbox(body, height=14)
+        items_list.grid(row=0, column=0, rowspan=3, padx=(8, 6), pady=8, sticky="ns")
+
+        # Lista de stats
+        stats_list = tk.Listbox(body, height=14, width=40)
+        stats_list.grid(row=0, column=1, rowspan=3, padx=6, pady=8, sticky="nsew")
+
+        body.grid_columnconfigure(1, weight=1)
+
+        form = ctk.CTkFrame(body)
+        form.grid(row=0, column=2, padx=8, pady=8, sticky="n")
+        ctk.CTkLabel(form, text="obj").grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(form, text="min").grid(row=1, column=0, sticky="w")
+        ctk.CTkLabel(form, text="max").grid(row=2, column=0, sticky="w")
+        obj_var = tk.StringVar()
+        min_var = tk.StringVar()
+        max_var = tk.StringVar()
+        ctk.CTkEntry(form, textvariable=obj_var, width=120).grid(row=0, column=1, pady=2)
+        ctk.CTkEntry(form, textvariable=min_var, width=120).grid(row=1, column=1, pady=2)
+        ctk.CTkEntry(form, textvariable=max_var, width=120).grid(row=2, column=1, pady=2)
+
+        current_item = {"name": None, "rows": []}
+
+        def refresh_items():
+            items_list.delete(0, "end")
+            q = search_var.get().strip().lower()
+            for name in sorted(stats_db.keys()):
+                if not q or q in name.lower():
+                    items_list.insert("end", name)
+
+        def load_item(name):
+            stats_list.delete(0, "end")
+            if not name or name not in stats_db:
+                return
+            s = stats_db[name]
+            rows = []
+            for i, obj in enumerate(s.get("obj", [])):
+                mn = s.get("min", [])[i] if i < len(s.get("min", [])) else 0
+                mx = s.get("max", [])[i] if i < len(s.get("max", [])) else 0
+                rows.append([obj, mn, mx])
+            current_item["name"] = name
+            current_item["rows"] = rows
+            for r in rows:
+                stats_list.insert("end", f"{r[0]} | {r[1]} | {r[2]}")
+
+        def on_item_select(evt=None):
+            sel = items_list.curselection()
+            if not sel:
+                return
+            name = items_list.get(sel[0])
+            load_item(name)
+
+        def on_stat_select(evt=None):
+            sel = stats_list.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            try:
+                obj_var.set(current_item["rows"][idx][0])
+                min_var.set(str(current_item["rows"][idx][1]))
+                max_var.set(str(current_item["rows"][idx][2]))
+            except Exception:
+                pass
+
+        def update_row():
+            sel = stats_list.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            try:
+                obj = obj_var.get().strip()
+                mn = int(min_var.get().strip() or "0")
+                mx = int(max_var.get().strip() or "0")
+                current_item["rows"][idx] = [obj, mn, mx]
+                stats_list.delete(idx)
+                stats_list.insert(idx, f"{obj} | {mn} | {mx}")
+            except Exception:
+                messagebox.showwarning("Error", "Valores inválidos.")
+
+        def move_row(delta):
+            sel = stats_list.curselection()
+            if not sel:
+                return
+            i = sel[0]
+            j = i + delta
+            if j < 0 or j >= len(current_item["rows"]):
+                return
+            rows = current_item["rows"]
+            rows[i], rows[j] = rows[j], rows[i]
+            load_item(current_item["name"])
+            stats_list.selection_set(j)
+            on_stat_select()
+
+        def save_db():
+            name = current_item["name"]
+            if not name:
+                return
+            rows = current_item["rows"]
+            stats_db[name] = {
+                "obj": [r[0] for r in rows],
+                "min": [r[1] for r in rows],
+                "max": [r[2] for r in rows],
+            }
+            Setup_Item_Stats_Database.save_item_stats_txt(stats_db)
+            messagebox.showinfo("Guardado", "DB guardada en TXT.")
+            refresh_items()
+
+        items_list.bind("<<ListboxSelect>>", on_item_select)
+        stats_list.bind("<<ListboxSelect>>", on_stat_select)
+        search_entry.bind("<KeyRelease>", lambda e: refresh_items())
+
+        btns = ctk.CTkFrame(editor)
+        btns.pack(fill="x", padx=12, pady=8)
+        ctk.CTkButton(btns, text="Actualizar fila", command=update_row).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="Subir", command=lambda: move_row(-1)).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="Bajar", command=lambda: move_row(1)).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="Guardar TXT", command=save_db).pack(side="right", padx=6)
+
+        refresh_items()
+
+    edit_btn = ctk.CTkButton(frame_controls, text="Editar DB", width=140, height=36, font=("Segoe UI", 12), command=open_db_editor)
+    edit_btn.grid(row=0, column=3, padx=10, pady=14)
 
     worker_thread = {"thread": None}
 
@@ -467,36 +603,36 @@ def build_ui():
         t = threading.Thread(target=run_process, args=(control_events, status_var, start_btn, stop_btn), daemon=True)
         worker_thread["thread"] = t
         t.start()
-        start_btn.state(["disabled"])
-        stop_btn.state(["!disabled"])
-        pause_btn.state(["!disabled"])
-        pause_btn.config(text="Pausar (F9)")
+        start_btn.configure(state="disabled")
+        stop_btn.configure(state="normal")
+        pause_btn.configure(state="normal")
+        pause_btn.configure(text="Pausar (F9)")
         log("Hilo iniciado")
 
     def pause_toggle(event=None):
         if control_events.pause_event.is_set():
             control_events.pause_event.clear()
             status_var.set("Pausado")
-            pause_btn.config(text="Reanudar (F9)")
+            pause_btn.configure(text="Reanudar (F9)")
             log("Pausado")
         else:
             control_events.pause_event.set()
             status_var.set("Reanudando...")
-            pause_btn.config(text="Pausar (F9)")
+            pause_btn.configure(text="Pausar (F9)")
             log("Reanudado")
 
     def stop_clicked(event=None):
         control_events.stop_event.set()
-        control_events.pause_event.set()  # asegurar que no esté pausado para permitir salida
+        control_events.pause_event.set()
         status_var.set("Parando y guardando...")
         log("Solicitada parada (F10 / Parar)")
-        stop_btn.state(["disabled"])
-        pause_btn.state(["disabled"])
+        stop_btn.configure(state="disabled")
+        pause_btn.configure(state="disabled")
 
     # Asignar comandos a botones
-    start_btn.config(command=start_clicked)
-    pause_btn.config(command=pause_toggle)
-    stop_btn.config(command=stop_clicked)
+    start_btn.configure(command=start_clicked)
+    pause_btn.configure(command=pause_toggle)
+    stop_btn.configure(command=stop_clicked)
 
     # Bind global keys (captura aunque el foco esté en widgets)
     root.bind_all('<F9>', lambda e: pause_toggle())

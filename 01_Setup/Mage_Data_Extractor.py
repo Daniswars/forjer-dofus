@@ -13,8 +13,8 @@ pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 general_x1 = 1552
 general_x2 = 1600
 STAT_COORDS = [
-    (general_x1, 756, general_x2, 823),
-    (general_x1, 823, 1610, 891),
+    (general_x1, 756, general_x2+50, 823),
+    (general_x1, 823, general_x2, 891),
     (general_x1, 891, general_x2, 958),
     (general_x1, 958, general_x2, 1026),
     (general_x1, 1026, general_x2, 1097),
@@ -367,38 +367,52 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
         numbers.append(num)
         raw_texts.append(txt_clean)
 
-    # NUEVA REGLA: si existe min_list y el valor leído es > 2 * minv,
-    # recortar exactamente UN dígito por la derecha del texto OCR (no iterativo).
-    if min_list:
+    # REGLA ACTUALIZADA: si existe min_list o max_list y el valor leído supera 2*min
+    # O si supera max + 20, entonces recortar exactamente UN dígito por la derecha del texto OCR.
+    if min_list or max_list:
         for i in range(min(len(numbers), len(coords))):
             try:
                 minv = None
-                if i < len(min_list):
+                maxv = None
+                if min_list and i < len(min_list):
                     try:
                         minv = int(min_list[i])
                     except Exception:
                         minv = None
-                # si no hay mínimo definido, no intentamos recorte por mínimos
-                if not minv or minv <= 0:
+                if max_list and i < len(max_list):
+                    try:
+                        maxv = int(max_list[i])
+                    except Exception:
+                        maxv = None
+
+                # Si no hay ni mínimo ni máximo definido para esta fila, no intentamos recorte
+                if (not minv or minv <= 0) and (maxv is None):
                     continue
+
                 num = numbers[i] or 0
                 txt = (raw_texts[i] or str(num))
-                # extraer dígitos detectados en el OCR
+                # extraer sólo los dígitos detectados en el OCR
                 digits = "".join(re.findall(r'\d', txt)) or str(num)
                 original_digits = digits
 
-                # Si el número leído es mayor que 2 * minv, asumimos un dígito extra final:
-                # recortamos solamente el último carácter (no iterativo).
-                if num > 2 * minv and len(digits) > 1:
+                # Evaluar condiciones: 2*min OR max+20
+                triggered = False
+                reason = None
+                if minv and num > 2 * minv:
+                    if (maxv is not None) and num > (maxv + 20):
+                        triggered = True
+                        reason = f"2*min={2*minv}"
+
+                # Si alguna condición se cumple y hay al menos 2 dígitos, recortamos el último dígito
+                if triggered and len(digits) > 1:
                     new_digits = digits[:-1]
                     try:
                         new_val = int(new_digits)
                         numbers[i] = new_val
                         raw_texts[i] = new_digits
-                        print(f"[ADJUST-MIN] fila {i+1}: OCR='{original_digits}' ajustado a '{raw_texts[i]}' por 2*min={2*minv}")
+                        print(f"[ADJUST] fila {i+1}: OCR='{original_digits}' ajustado a '{raw_texts[i]}' por {reason}")
                     except Exception:
-                        # si no podemos convertir, no hacemos cambio
-                        print(f"[ADJUST-MIN] fila {i+1}: OCR='{original_digits}' detectado >2*min={2*minv} pero no se pudo convertir tras recorte")
+                        print(f"[ADJUST] fila {i+1}: OCR='{original_digits}' activó {reason} pero recorte no convertible")
             except Exception:
                 continue
 
@@ -418,9 +432,10 @@ if __name__ == "__main__":
 
     # Stats de prueba: Anillo inestable
     test_item_stats = {
-        "min": [186, 40, 3, 3, 3, 3, 3, 11, 8, 31],
-        "max": [200, 50, 4, 4, 4, 4, 4, 15, 12, 40],
-        "obj": ["vi", "sa", "re_neu", "re_tierra", "re_fuego", "re_agua", "re_aire", "hui", "es_pm", "re_emp"]
+        "min": [86, 55, 55, 21, 6, 1, 1, 6, 6, 8, 3, 3, 11],
+        "max": [100, 60, 60, 30, 6, 1, 1, 6, 6, 8, 10, 10, 11],
+        "obj": ["vi", "inte", "agi", "sa", "cri", "al", "inv", "da_fuego", "da_aire", "re_agua_por", "re_tierra",
+                "re_aire", "da_cri"]
     }
 
     try:

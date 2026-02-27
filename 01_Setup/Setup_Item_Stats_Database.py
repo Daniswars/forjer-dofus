@@ -5,6 +5,11 @@ Funciones públicas:
 - list_items() -> list[str]
 """
 
+import json
+from pathlib import Path
+
+STATS_TXT_PATH = Path(__file__).with_name("item_stats.txt")
+
 ITEM_STATS = {
     "Anillo de vueloceronte": {
         "min": [236, 91, 4, 16, 10],
@@ -175,7 +180,7 @@ ITEM_STATS = {
     },
     "Anillo de micholobo": {
         "min": [186, 35, 35, 16, 1, 8, 8, 8, 4, 8],
-        "max": [200, 40, 40, 25, 1, 8, 8, 8, 4, 8],
+        "max": [200, 40, 40, 25, 1, 10, 10, 10, 4, 10],
         "obj": ["vi", "fo", "sue", "sa", "inv", "da_neu", "da_tierra", "da_agua", "ret_pm", "da_cri"]
     },
     "Collar Lunar": {
@@ -345,6 +350,34 @@ def get_item_max(name: str):
 def list_items():
     "Devuelve la lista de nombres disponibles (ordenada)."
     return sorted(ITEM_STATS.keys())
+
+
+# --- NUEVO: cargar/guardar DB desde TXT (JSON) ---
+def load_item_stats_txt():
+    if STATS_TXT_PATH.exists():
+        try:
+            with STATS_TXT_PATH.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+
+def save_item_stats_txt(stats_dict):
+    try:
+        with STATS_TXT_PATH.open("w", encoding="utf-8") as f:
+            json.dump(stats_dict, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+# Si existe TXT, usarlo; si no, crearlo con el dict actual
+_loaded = load_item_stats_txt()
+if isinstance(_loaded, dict):
+    ITEM_STATS = _loaded
+else:
+    save_item_stats_txt(ITEM_STATS)
 
 
 # Bloque de prueba mínimo

@@ -68,6 +68,9 @@ def perform_dofus_sequence():
     time.sleep(1 * SLOW_FACTOR)  # Delay after the click
 
     # Double click at the second position
+    time.sleep(1)
+    pyautogui.click(2024, 653)
+    time.sleep(1)
     print("Double clicking at X=1490, Y=732...")
     pyautogui.moveTo(x=2150, y=722)
     time.sleep(1 * SLOW_FACTOR)
