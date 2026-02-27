@@ -9,6 +9,12 @@ from Mage_Exo_Verify import verify_success
 import Extra_Correo as Correo
 import Aux_Forjamagia_imposible as AuxForja
 
+# Intentar importar helper de reseteo de sesión (opcional)
+try:
+    import Aux_Resetear_sesion as SessionReset
+except Exception:
+    SessionReset = None
+
 # Coordenadas del área de lectura: (x1,y1) -> (x2,y2)
 X1, Y1 = 1512, 761
 X2, Y2 = 1863, 1634
@@ -352,6 +358,30 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 # si llegamos aquí -> todas las stats están entre min y max: introducir exo
                 try:
                     Mage_Introduce_Exo_mod.introducir_exo()
+                    # Mostrar tiempo acumulado de magueo tras cada intento de introducir EXO
+                    elapsed = time.time() - start_time
+                    try:
+                        print(f"DEBUG: se ha introducido EXO -> tiempo magueando acumulado: {int(elapsed)}s")
+                    except Exception:
+                        pass
+                    # Si lleva más de 30 minutos magueando, intentar resetear sesión y retornar indicando reset
+                    if elapsed >= 30 * 60:
+                        reset_done = False
+                        try:
+                            print("DEBUG: Tiempo >= 30min. Intentando resetear sesión desde Mage_Main tras introducir EXO...")
+                            if SessionReset is not None and hasattr(SessionReset, "restart_dofus_and_click_forge"):
+                                try:
+                                    res = SessionReset.restart_dofus_and_click_forge(item_name)
+                                    reset_done = bool(res)
+                                    print(f"DEBUG: restart_dofus_and_click_forge resultado: {res}")
+                                except Exception as e:
+                                    print("WARNING: Excepción al intentar restart_dofus_and_click_forge:", e)
+                            else:
+                                print("DEBUG: Aux_Resetear_sesion no disponible en Mage_Main.")
+                        except Exception as e:
+                            print("WARNING: fallo al intentar resetear sesión desde Mage_Main:", e)
+                        # Devolver indicando que se hizo/intentó reset para que RUN actualice su temporizador y no guarde este intento como fallo
+                        return _make_result(False, error="session_reset", extra={"reset_session": reset_done, "elapsed_since_start": elapsed})
                 except Exception:
                     try:
                         from Mage_Introduce_Exo import introducir_exo as __introducir_exo_fallback
@@ -362,14 +392,37 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 time.sleep(0.08)  # dar tiempo al juego
                 print("Verificando exo...")
                 if verify_success():
+                    # Añadido: medir tiempo desde el inicio del mage_main y decidir reset de sesión
+                    elapsed = time.time() - start_time
+                    try:
+                        print(f"DEBUG: verify_success() -> tiempo ejecutando ciclo: {int(elapsed)}s")
+                    except Exception:
+                        pass
+
+                    reset_done = False
+                    # Si han pasado >= 30 minutos, intentar resetear la sesión aquí
+                    if elapsed >= 30 * 60:
+                        try:
+                            print("DEBUG: Tiempo >= 30min. Intentando resetear sesión desde Mage_Main...")
+                            if SessionReset is not None and hasattr(SessionReset, "restart_dofus_and_click_forge"):
+                                try:
+                                    res = SessionReset.restart_dofus_and_click_forge(item_name)
+                                    reset_done = bool(res)
+                                    print(f"DEBUG: restart_dofus_and_click_forge resultado: {res}")
+                                except Exception as e:
+                                    print("WARNING: Excepción al intentar restart_dofus_and_click_forge:", e)
+                            else:
+                                print("DEBUG: Aux_Resetear_sesion no disponible en Mage_Main.")
+                        except Exception as e:
+                            print("WARNING: fallo al intentar resetear sesión desde Mage_Main:", e)
+
                     try:
                         Correo.send_mail(item_name, "Exito PA")
                     except Exception:
                         pass
 
-                    # ELIMINADO: el guardado se hace desde RUN.py, no aquí
-                    # Solo devolver success=True para que RUN lo maneje
-                    return _make_result(True, extra={"exo_verified": True})
+                    # Devolver flag para que RUN actualice su temporizador y actúe si lo desea
+                    return _make_result(True, extra={"exo_verified": True, "reset_session": reset_done, "elapsed_since_start": elapsed})
                 else:
                     print("EXO falló. Continuando con runas si procede.")
                     time.sleep(0.06)

@@ -244,6 +244,18 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         except Exception as e:
                             ok = False
                             log(f"Excepción al ejecutar restart_dofus_and_click_forge: {e}")
+                        # NOTIFICACIÓN POR CORREO: informar del intento de reseteo
+                        try:
+                            if Correo is not None:
+                                if ok:
+                                    Correo.send_mail(current_item, "Reseteo sesión - OK")
+                                else:
+                                    Correo.send_mail(current_item, "Reseteo sesión - FALLÓ")
+                                log("Correo enviado sobre reseteo de sesión.")
+                            else:
+                                log("Extra_Correo no disponible: no se envió notificación por correo.")
+                        except Exception as e:
+                            log(f"WARNING: fallo enviando correo de reseteo: {e}")
                         # si la función devuelve None, considerarla como False (intento fallido)
                         if ok:
                             log("Reseteo de sesión realizado correctamente.")
@@ -309,6 +321,21 @@ def run_process(control_events, status_var, start_btn, stop_btn):
         except Exception as e:
             print("ERROR en Mage_Main:", e)
             result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": repr(e)}
+
+        # --- NUEVO: Si mage_main indicó que hizo reset de sesión, actualizar temporizador local ---
+        try:
+            if isinstance(result, dict) and result.get("reset_session"):
+                last_session_reset_time = time.monotonic()
+                log("RUN: Se ha detectado reset de sesión solicitado por Mage_Main. last_session_reset_time restablecido.")
+                # opcional: informar por correo que se hizo reseteo (no bloquear si falla)
+                try:
+                    current_item = shared_state.get("current_item", "") or ""
+                    if Correo is not None:
+                        Correo.send_mail(current_item, "Reseteo sesión - OK")
+                except Exception as e:
+                    log(f"WARNING: fallo enviando correo tras reset de sesión: {e}")
+        except Exception:
+            pass
 
         # --- UNIFICACIÓN: obtener valores definitivos para guardado ---
         # 1. elapsed real (medido aquí)

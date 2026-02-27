@@ -34,7 +34,7 @@ def click(x, y, reason=None):
         pyautogui.click()
     except Exception as e:
         print(f"[CLICK-ERROR] al intentar click en ({x},{y}) reason={reason!r} error={e}")
-    time.sleep(random.uniform(0.06,0.1))
+    time.sleep(random.uniform(0.06,0.08))
 
 def ensure_ui_active():
     # presionar Alt brevemente para "desatascar" la UI después de interacciones
