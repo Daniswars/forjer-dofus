@@ -175,8 +175,9 @@ def install_monkeypatches():
 def run_process(control_events, status_var, start_btn, stop_btn):
     """
     Orquesta en bucle: Main_Setup -> Mage_Main -> guardar con Main_Save_Data.finalize_session.
-    Repite automáticamente hasta que se active stop_event.
+    Repite automáticamente hasta que se activa stop_event.
     """
+
     def ui_set_start_disabled():
         try:
             start_btn.configure(state="disabled")
@@ -203,37 +204,63 @@ def run_process(control_events, status_var, start_btn, stop_btn):
     except Exception as e:
         print("WARNING: install_monkeypatches falló:", e)
 
-    # INICIALIZAR temporizador de reseteo de sesión (30 minutos)
-    last_session_reset_time = time.time()
+    # --- Añadido: logger local accesible dentro de run_process ---
+    def log(msg):
+        ts = time.strftime("%H:%M:%S")
+        entry = f"[{ts}] {msg}"
+        try:
+            # intentar actualizar status_var si está disponible
+            status_var.set(msg)
+        except Exception:
+            pass
+        # imprimir siempre a stdout para debug en consola/hilos
+        try:
+            print(entry)
+        except Exception:
+            pass
+
+    # INICIALIZAR temporizador de reseteo de sesión (30 minutos) usando monotonic
+    last_session_reset_time = time.monotonic()
     SESSION_RESET_INTERVAL = 30 * 60  # 30 minutos
 
     # Bucle principal: repetir mientras no se solicite stop
     while not control_events.stop_event.is_set():
         # --- NUEVO: Comprobar si ha pasado el intervalo de 30 minutos para resetear sesión ---
         try:
-            elapsed_since_reset = time.time() - last_session_reset_time
+            elapsed_since_reset = time.monotonic() - last_session_reset_time
             if elapsed_since_reset >= SESSION_RESET_INTERVAL:
-                status_var.set("Reseteando sesión (30m)...")
+                try:
+                    status_var.set("Reseteando sesión (30m)...")
+                except Exception:
+                    pass
                 log(f"Tiempo de ejecución >=30min ({int(elapsed_since_reset)}s). Realizando reseteo de sesión.")
                 # intentar resetear sesión solo si tenemos el módulo disponible
                 try:
                     if SessionReset is not None and hasattr(SessionReset, "restart_dofus_and_click_forge"):
                         # pasar el nombre del item actual si está disponible
                         current_item = shared_state.get("current_item", "") or ""
-                        ok = SessionReset.restart_dofus_and_click_forge(current_item)
+                        try:
+                            ok = SessionReset.restart_dofus_and_click_forge(current_item)
+                        except Exception as e:
+                            ok = False
+                            log(f"Excepción al ejecutar restart_dofus_and_click_forge: {e}")
+                        # si la función devuelve None, considerarla como False (intento fallido)
                         if ok:
                             log("Reseteo de sesión realizado correctamente.")
                         else:
-                            log("Reseteo de sesión intentado pero falló (ver salida).")
+                            log("Reseteo de sesión intentado pero falló o devolvió False.")
                     else:
                         log("SessionReset no disponible: no se puede resetear sesión automáticamente.")
                 except Exception as e:
                     log(f"ERROR durante reseteo de sesión: {e}")
-                # Resetar contadores y timmer
+                # Resetar contadores y timmer (siempre actualizar el timer para evitar bucle inmediato)
                 shared_state["exo_attempts"] = 0
                 shared_state["rune_clicks"] = 0
-                last_session_reset_time = time.time()
-                status_var.set("Sesión reseteada. Reintentando Setup...")
+                last_session_reset_time = time.monotonic()
+                try:
+                    status_var.set("Sesión reseteada. Reintentando Setup...")
+                except Exception:
+                    pass
                 # pequeña espera para estabilizar ventanas antes de volver a setup
                 time.sleep(1.0)
                 continue
@@ -272,6 +299,7 @@ def run_process(control_events, status_var, start_btn, stop_btn):
 
         # 3) Ejecutar mage_main (pasa control_events)
         status_var.set("Ejecutando Mage_Main...")
+        start_mage_time = time.time()
         try:
             result = mage_main(
                 item_name,
@@ -282,29 +310,27 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             print("ERROR en Mage_Main:", e)
             result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": repr(e)}
 
-        # --- NUEVA LÓGICA: normalizar result y obtener elapsed/attempts/time_per_attempt ---
-        if not isinstance(result, dict):
-            result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": None}
+        # --- UNIFICACIÓN: obtener valores definitivos para guardado ---
+        # 1. elapsed real (medido aquí)
+        elapsed_real = time.time() - start_mage_time
 
-        elapsed = result.get("elapsed", 0.0)
-        time_per_attempt = result.get("time_per_attempt", None)
-
-        # attempts: preferimos shared_state (actualizado por el wrapper) si está disponible y es entero >=0
+        # 2. attempts: SIEMPRE desde shared_state (única fuente de verdad)
         try:
             attempts_to_save = int(shared_state.get("exo_attempts", 0))
         except Exception:
-            attempts_to_save = int(result.get("attempts", 0) or 0)
+            attempts_to_save = 0
 
-        # si no tenemos time_per_attempt calculado y hay attempts, calcularlo aquí
-        if time_per_attempt is None and attempts_to_save > 0:
-            try:
-                time_per_attempt = float(elapsed) / attempts_to_save
-            except Exception:
-                time_per_attempt = None
+        # 3. time_per_attempt: calculado aquí una sola vez
+        if attempts_to_save > 0:
+            time_per_attempt = elapsed_real / attempts_to_save
+        else:
+            time_per_attempt = None
 
-        # Flags para las ramas siguientes
+        # 4. Flags de resultado
         error_code = result.get("error")
         success_flag = bool(result.get("success", False))
+
+        print(f"DEBUG_SAVEFLOW: elapsed={elapsed_real:.2f}s attempts={attempts_to_save} time_per_attempt={time_per_attempt}")
 
         # 4) Comportamiento específico: si no_progress -> guardar fallo, popup y decidir continuar o terminar
         if error_code == "no_progress":
@@ -323,20 +349,19 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         tipo_exo=None,
                         kamas_iniciales_arg=None
                     )
-                    print(f"DEBUG_SAVEFLOW: guardado fallo no_progress saved={saved} attempts_saved={attempts_to_save} time_per_attempt={time_per_attempt}")
+                    print(f"DEBUG_SAVEFLOW: guardado fallo no_progress saved={saved}")
                 except Exception as e:
                     print("ERROR al guardar fallo (no_progress):", e)
                     status_var.set("Error al guardar fallo")
 
-            # Mostrar ventana emergente en el hilo de la UI y esperar la respuesta del usuario.
-            # Usamos start_btn.after para lanzar el dialog en el hilo principal y threading.Event para sincronizar.
+            # Mostrar ventana emergente y esperar respuesta
             import threading
             response = {"val": None}
             response_event = threading.Event()
 
             def ask_continue_dialog():
                 try:
-                    ans = messagebox.askyesno("Sin runas", "No quedan runas PA. ¿Continuar (omitir este objeto) ?\n\nSi eliges 'No' se detendrá la ejecución.")
+                    ans = messagebox.askyesno("Sin runas", "No quedan runas PA. ¿Continuar (omitir este objeto)?\n\nSi eliges 'No' se detendrá la ejecución.")
                     response["val"] = bool(ans)
                 except Exception:
                     response["val"] = False
@@ -344,31 +369,26 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     response_event.set()
 
             try:
-                # lanzar diálogo en UI thread
                 start_btn.after(0, ask_continue_dialog)
-                # esperar respuesta (esto bloquea el hilo worker pero no la UI)
                 response_event.wait()
             except Exception as e:
-                print("Aviso: no se pudo mostrar diálogo de 'Sin runas' (entorno no gráfico?):", e)
+                print("Aviso: no se pudo mostrar diálogo de 'Sin runas':", e)
                 response["val"] = False
 
             user_chose_continue = bool(response.get("val", False))
             if user_chose_continue:
-                print("Usuario eligió continuar tras 'Sin runas'. Se reanuda el bucle principal.")
-                status_var.set("Usuario eligió continuar (sin runas).")
-                # continuar con el bucle principal (no ejecutar setup-stop)
-                # pequeña pausa para estabilizar UI
+                print("Usuario eligió continuar tras 'Sin runas'.")
+                status_var.set("Continuando (sin runas).")
                 time.sleep(0.3)
                 continue
             else:
-                print("Usuario eligió detener tras 'Sin runas'. Terminando bucle.")
-                status_var.set("Detenido por usuario tras 'Sin runas'.")
-                # salir del bucle principal
+                print("Usuario eligió detener tras 'Sin runas'.")
+                status_var.set("Detenido por usuario.")
                 break
 
-        # 5) Si éxito: guardar éxito (sin popups) y continuar con siguiente ciclo (setup)
+        # 5) Si éxito: guardar éxito y continuar automáticamente
         if success_flag:
-            print("DEBUG: Éxito PA detectado. Guardando éxito y continuando con siguiente ciclo de setup.")
+            print("DEBUG: Éxito PA detectado. Guardando éxito.")
             if DataSaver is not None:
                 try:
                     status_var.set("Guardando éxito...")
@@ -383,20 +403,32 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         tipo_exo="PA",
                         kamas_iniciales_arg=None
                     )
-                    print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved} attempts_saved={attempts_to_save} time_per_attempt={time_per_attempt}")
+                    print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved}")
+
+                    # Ejecutar Aux_Guardar_exito solo si guardado fue exitoso
+                    if saved in (0, True):
+                        try:
+                            import Aux_Guardar_exito as Aux
+                            log("Ejecutando secuencia de guardado de éxito...")
+                            Aux.perform_dofus_sequence()
+                            log("Secuencia de guardado completada.")
+                        except Exception as e:
+                            print("ERROR al ejecutar Aux_Guardar_exito:", e)
+                            log(f"Error en secuencia de guardado: {e}")
+
                 except Exception as e:
                     print("ERROR al guardar éxito:", e)
                     status_var.set("Error al guardar éxito")
-            # No mostrar ventanas; continuar a la siguiente iteración (nuevo setup)
+
+            # Continuar automáticamente al siguiente setup
             if control_events.stop_event.is_set():
                 print("Stop solicitado tras éxito: saliendo.")
                 break
-            # pequeña espera antes de reiniciar
             time.sleep(0.5)
             continue
 
-        # 6) Otros casos (error distinto o simple fallo): guardar como fallo pero continuar el bucle
-        print("DEBUG: Resultado intermedio/no-exito sin 'no_progress'. Guardando como fallo y continuando.")
+        # 6) Otros casos: guardar como fallo y continuar
+        print("DEBUG: Resultado no-éxito sin 'no_progress'. Guardando como fallo.")
         if DataSaver is not None:
             try:
                 status_var.set("Guardando fallo...")
@@ -411,21 +443,17 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     tipo_exo=None,
                     kamas_iniciales_arg=None
                 )
-                print(f"DEBUG_SAVEFLOW: guardado fallback saved={saved} attempts_saved={attempts_to_save}")
+                print(f"DEBUG_SAVEFLOW: guardado fallback saved={saved}")
             except Exception as e:
                 print("ERROR al guardar fallback:", e)
                 status_var.set("Error al guardar")
-        else:
-            status_var.set("DataSaver no disponible - no guardado.")
 
-        # Si stop fue solicitado durante la ejecución de mage_main o guardado, salir del bucle
         if control_events.stop_event.is_set():
-            print("Stop solicitado: saliendo del bucle principal.")
+            print("Stop solicitado: saliendo.")
             break
 
-        # Pequeña pausa antes de reiniciar para permitir estabilizar UI/ventana
         time.sleep(0.5)
-        # continua el bucle -> nuevo setup y magueo
+        # Continuar bucle -> nuevo setup
 
     # Finalizar y restaurar UI
     try:

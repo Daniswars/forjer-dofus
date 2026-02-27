@@ -7,6 +7,36 @@ import re
 import time
 import os
 
+# --- Definiciones de columnas (solo una vez, al inicio) ---
+COLUMNAS_FALLOS = {
+    "Fecha": 1,
+    "Objeto": 2,
+    "Intentos": 3,
+    "Kamas Iniciales": 4,
+    "Kamas Finales": 5,
+    "Inversion": 6,
+    "Tiempo Medio por Intento (s)": 7,
+    "Kamas por Intento": 8,
+    "Resultado": 9
+}
+
+COLUMNAS_EXITOS = {
+    "Fecha": 1,
+    "Objeto": 2,
+    "Intentos Totales": 3,
+    "Kamas Iniciales (acum.)": 4,
+    "Kamas Finales": 5,
+    "Inversion Total": 6,
+    "Tiempo Medio por Intento (s)": 7,
+    "Kamas por Intento (promedio)": 8,
+    "Resultado": 9,
+    "Precio Objeto Base": 10,
+    "Precio Venta Objeto Final": 11,
+    "Tipo Exo": 12,
+    "Rentabilidad (kamas/h)": 13,
+    "Eficiencia": 14
+}
+
 
 def _is_success_flag(exito):
     """Normaliza y decide si 'exito' representa un Success (incluye PA/1/True)."""
@@ -97,42 +127,11 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
     """
 
     # --- Configuración ---
-    # Archivo pedido por el usuario
     ruta_archivo_excel = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\20260213_Dofus3_Mage_Database.xlsx"
 
     nombre_hoja_fallos = "Fallos Forjamagia"
     nombre_hoja_exitos = "Exitos Forjamagia"
 
-    COLUMNAS_FALLOS = {
-        "Fecha": 1,
-        "Objeto": 2,
-        "Intentos": 3,
-        "Kamas Iniciales": 4,  # Kamas al inicio de esa sesión de fallo
-        "Kamas Finales": 5,  # Kamas al final de esa sesión de fallo
-        "Inversion": 6,  # (Kamas Iniciales - Kamas Finales) de esa sesión
-        "Tiempo Medio por Intento (s)": 7,
-        "Kamas por Intento": 8,
-        "Resultado": 9
-    }
-
-    # Cabeceras EXACTAS solicitadas por el usuario (A..M -> 13 columnas)
-    COLUMNAS_EXITOS = {
-        "Fecha": 1,
-        "Objeto": 2,
-        "Intentos Totales": 3,
-        "Kamas Iniciales (acum.)": 4,  # Kamas iniciales más bajas de toda la cadena de intentos
-        "Kamas Finales": 5,  # Kamas finales del último intento (el exitoso)
-        "Inversion Total": 6,  # Suma de todas las inversiones (inicial - final) de todos los intentos
-        "Tiempo Medio por Intento (s)": 7,  # Promedio de tiempo por intento de toda la cadena
-        "Kamas por Intento (promedio)": 8,  # Promedio de kamas gastadas por intento de toda la cadena
-        "Resultado": 9,
-        "Precio Objeto Base": 10,  # Precio al que compraste/crafteaste el objeto (antes de empezar magueo)
-        "Precio Venta Objeto Final": 11,  # Precio al que vendes el objeto ya exomagueado
-        "Tipo Exo": 12,
-        "Rentabilidad (kamas/h)": 13
-    }
-
-    # --- Pre-procesamiento de datos ---
     print(f"\n--- Inicia agregar_datos para '{objeto_seleccionado}', Exito: '{exito}' ---")
     print("DEBUG_RAW_INPUT TYPES/VALUES:")
     print(f"  - intentos   : type={type(intentos)} value={intentos}")
@@ -391,6 +390,19 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
             except Exception:
                 rentabilidad = None
 
+        # --- NUEVO: Calcular 'Eficiencia' ---
+        # Definición inventada: Eficiencia = rentabilidad / (abs(kamas_por_intento_acumulado) + 1)
+        # Razonamiento: recompensa por hora ajustada por el coste medio por intento.
+        eficiencia = None
+        try:
+            if rentabilidad is not None:
+                eficiencia = float(rentabilidad) / (abs(kamas_por_intento_acumulado) + 1)
+        except Exception as e:
+            print("WARNING: fallo calculando Eficiencia:", e)
+            eficiencia = None
+
+        print(f"DEBUG_METRICS: rentabilidad={rentabilidad} eficiencia={eficiencia} (kamas_por_intento={kamas_por_intento_acumulado})")
+
         # Añadir "Resultado" al registro de éxito (por nombre de header)
         row_values_exito = {
             "Fecha": fecha_hoy,
@@ -405,7 +417,8 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
             "Precio Objeto Base": precio_objeto_base if precio_objeto_base is not None else 0,
             "Precio Venta Objeto Final": precio_venta_objeto_final if precio_venta_objeto_final is not None else 0,
             "Tipo Exo": tipo_exo,
-            "Rentabilidad (kamas/h)": rentabilidad
+            "Rentabilidad (kamas/h)": rentabilidad,
+            "Eficiencia": eficiencia
         }
 
         expected_headers_exitos = list(COLUMNAS_EXITOS.keys())
@@ -648,3 +661,152 @@ if __name__ == "__main__":
     except ValueError:
         n = 10
     run_two_phase_demo(objeto=nombre_obj, n_fail=n)
+
+    # --- PARTE 2: Migración de datos de "Old" a "Exitos" ---
+    print("\n" + "="*60)
+    print("PARTE 2: Migración de datos de hoja 'Old' a 'Exitos Forjamagia'")
+    print("="*60)
+    input("Pulsa Enter para ejecutar la migración de 'Old' -> 'Exitos' (Ctrl+C para cancelar)...")
+
+    ruta_archivo_excel = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\20260213_Dofus3_Mage_Database.xlsx"
+    nombre_hoja_old = "Old"
+    nombre_hoja_exitos = "Exitos Forjamagia"
+
+    try:
+        if not os.path.exists(ruta_archivo_excel):
+            print(f"ERROR: Archivo '{ruta_archivo_excel}' no encontrado. Abortando migración.")
+        else:
+            libro = openpyxl.load_workbook(ruta_archivo_excel)
+            if nombre_hoja_old not in libro.sheetnames:
+                print(f"ERROR: Hoja '{nombre_hoja_old}' no encontrada en el archivo. Abortando.")
+            else:
+                hoja_old = libro[nombre_hoja_old]
+                acumulados = {}
+
+                for row_num in range(2, hoja_old.max_row + 1):
+                    obj_val = hoja_old.cell(row=row_num, column=2).value
+                    if not obj_val:
+                        continue
+                    obj_name = str(obj_val).strip()
+                    if obj_name not in acumulados:
+                        acumulados[obj_name] = {
+                            "intentos": 0,
+                            "kamas_iniciales_min": 10**9,
+                            "kamas_finales": 0,
+                            "inversion_total": 0,
+                            "tiempo_total": 0.0,
+                            "rows": []
+                        }
+
+                    acc = acumulados[obj_name]
+                    acc["rows"].append(row_num)
+
+                    try:
+                        intentos_val = _safe_to_int(hoja_old.cell(row=row_num, column=3).value, default=0)
+                        acc["intentos"] += intentos_val
+                    except Exception:
+                        pass
+
+                    try:
+                        kamas_init_val = _safe_to_int(hoja_old.cell(row=row_num, column=4).value, default=0)
+                        acc["kamas_iniciales_min"] = min(acc["kamas_iniciales_min"], kamas_init_val)
+                    except Exception:
+                        pass
+
+                    try:
+                        kamas_fin_val = _safe_to_int(hoja_old.cell(row=row_num, column=5).value, default=0)
+                        acc["kamas_finales"] = kamas_fin_val
+                    except Exception:
+                        pass
+
+                    try:
+                        inversion_val = _safe_to_int(hoja_old.cell(row=row_num, column=6).value, default=0)
+                        acc["inversion_total"] += inversion_val
+                    except Exception:
+                        pass
+
+                    try:
+                        tiempo_val = _safe_to_float(hoja_old.cell(row=row_num, column=7).value, default=0.0)
+                        acc["tiempo_total"] += tiempo_val * intentos_val
+                    except Exception:
+                        pass
+
+                print(f"\nEncontrados {len(acumulados)} objetos únicos en 'Old'.")
+
+                if nombre_hoja_exitos not in libro.sheetnames:
+                    hoja_exitos = libro.create_sheet(nombre_hoja_exitos)
+                    for col_name, col_idx in COLUMNAS_EXITOS.items():
+                        hoja_exitos.cell(row=1, column=col_idx, value=col_name)
+                else:
+                    hoja_exitos = libro[nombre_hoja_exitos]
+
+                fecha_migracion = datetime.now().strftime("%Y-%m-%d")
+
+                for obj_name, acc in acumulados.items():
+                    total_intentos = acc["intentos"]
+                    kamas_iniciales_acum = acc["kamas_iniciales_min"] if acc["kamas_iniciales_min"] < 10**9 else 0
+                    kamas_finales = acc["kamas_finales"]
+                    inversion_total = acc["inversion_total"]
+                    tiempo_total = acc["tiempo_total"]
+
+                    # Calcular promedios
+                    tiempo_medio_intento = (tiempo_total / total_intentos) if total_intentos > 0 else 0.0
+                    kamas_por_intento = (inversion_total / total_intentos) if total_intentos > 0 else 0.0
+
+                    # Calcular rentabilidad
+                    rentabilidad = None
+                    if tiempo_total > 0:
+                        horas = tiempo_total / 3600.0
+                        net_kamas = kamas_finales - kamas_iniciales_acum
+                        try:
+                            rentabilidad = net_kamas / horas
+                        except Exception:
+                            rentabilidad = None
+
+                    # Calcular eficiencia
+                    eficiencia = None
+                    try:
+                        if rentabilidad is not None:
+                            eficiencia = float(rentabilidad) / (abs(kamas_por_intento) + 1)
+                    except Exception:
+                        eficiencia = None
+
+                    # Construir row_values (sin precios/tipo_exo ya que vienen de Old)
+                    row_values_exito = {
+                        "Fecha": fecha_migracion,
+                        "Objeto": obj_name,
+                        "Intentos Totales": total_intentos,
+                        "Kamas Iniciales (acum.)": kamas_iniciales_acum,
+                        "Kamas Finales": kamas_finales,
+                        "Inversion Total": inversion_total,
+                        "Tiempo Medio por Intento (s)": tiempo_medio_intento,
+                        "Kamas por Intento (promedio)": kamas_por_intento,
+                        "Resultado": "PA (migrado)",
+                        "Precio Objeto Base": 0,
+                        "Precio Venta Objeto Final": 0,
+                        "Tipo Exo": "PA",
+                        "Rentabilidad (kamas/h)": rentabilidad,
+                        "Eficiencia": eficiencia
+                    }
+
+                    # Insertar en hoja de éxitos (al final)
+                    fila_destino = hoja_exitos.max_row + 1
+                    _write_row_by_expected_mapping(hoja_exitos, fila_destino, COLUMNAS_EXITOS, row_values_exito)
+                    print(f"  Migrado éxito PA para '{obj_name}': {total_intentos} intentos, rentabilidad={rentabilidad}, eficiencia={eficiencia}")
+
+                # Eliminar filas procesadas de "Old" (de abajo hacia arriba para evitar desajustes de índices)
+                all_rows_to_delete = []
+                for acc in acumulados.values():
+                    all_rows_to_delete.extend(acc["rows"])
+                all_rows_to_delete = sorted(set(all_rows_to_delete), reverse=True)
+
+                for row_num in all_rows_to_delete:
+                    hoja_old.delete_rows(row_num)
+                print(f"\nEliminadas {len(all_rows_to_delete)} filas de la hoja '{nombre_hoja_old}'.")
+
+                # Guardar archivo
+                libro.save(ruta_archivo_excel)
+                print(f"\nMigración completada. Datos guardados en '{ruta_archivo_excel}'.")
+
+    except Exception as e:
+        print(f"ERROR durante la migración: {e}")

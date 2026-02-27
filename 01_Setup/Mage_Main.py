@@ -367,52 +367,9 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                     except Exception:
                         pass
 
-                    # intentar guardar directamente si Main_Save_Data está disponible
-                    saved_bool = False
-                    aux_executed = False
-                    run_aux_flag = False
-                    try:
-                        try:
-                            import Main_Save_Data as DataSaver
-                        except Exception:
-                            import sys
-                            from pathlib import Path
-                            sys.path.insert(0, str(Path(__file__).parent.parent))
-                            import Main_Save_Data as DataSaver
-                        result_save = DataSaver.finalize_session(
-                            objeto=item_name,
-                            intentos=int(_make_result(True)["attempts"]) or 1,
-                            exito="PA",
-                            tiempo_medio_intento=None,  # Main will compute based on shared_state
-                            modo_encadenado_activo=True,
-                            precio_objeto_base=None,
-                            precio_venta_objeto_final=None,
-                            tipo_exo="PA",
-                            kamas_iniciales_arg=None
-                        )
-                        saved_bool = (result_save in (0, True))
-                    except Exception as e:
-                        print("Aviso: no se pudo ejecutar Main_Save_Data.finalize_session desde Mage_Main:", e)
-                        saved_bool = False
-
-                    if saved_bool:
-                        try:
-                            try:
-                                import Aux_Guardar_exito as Aux
-                            except Exception:
-                                import sys
-                                from pathlib import Path
-                                sys.path.insert(0, str(Path(__file__).parent.parent))
-                                import Aux_Guardar_exito as Aux
-                            Aux.perform_dofus_sequence()
-                            aux_executed = True
-                        except Exception as e:
-                            print("Aviso: no se pudo ejecutar Aux_Guardar_exito.perform_dofus_sequence():", e)
-                            aux_executed = False
-                    else:
-                        run_aux_flag = True
-
-                    return _make_result(True, extra={"saved": saved_bool, "aux_executed": aux_executed, "run_aux": run_aux_flag})
+                    # ELIMINADO: el guardado se hace desde RUN.py, no aquí
+                    # Solo devolver success=True para que RUN lo maneje
+                    return _make_result(True, extra={"exo_verified": True})
                 else:
                     print("EXO falló. Continuando con runas si procede.")
                     time.sleep(0.06)
