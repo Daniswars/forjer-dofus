@@ -583,21 +583,6 @@
     ]
   },
   "Anillo de noai aludem": {
-    "obj": [
-      "vi",
-      "inte",
-      "agi",
-      "sa",
-      "cri",
-      "al",
-      "inv",
-      "da_fuego",
-      "da_aire",
-      "re_agua_por",
-      "re_tierra",
-      "re_aire",
-      "da_cri"
-    ],
     "min": [
       86,
       55,
@@ -617,16 +602,31 @@
       100,
       60,
       60,
-      40,
+      30,
       6,
       1,
       1,
-      7,
-      7,
+      6,
+      6,
       8,
       10,
       10,
-      12
+      11
+    ],
+    "obj": [
+      "vi",
+      "inte",
+      "agi",
+      "sa",
+      "cri",
+      "al",
+      "inv",
+      "da_fuego",
+      "da_aire",
+      "re_agua_por",
+      "re_tierra",
+      "re_aire",
+      "da_cri"
     ]
   },
   "Crueldad de Belladona": {
@@ -790,7 +790,6 @@
       9,
       280,
       10,
-      0,
       8
     ],
     "max": [
@@ -801,7 +800,6 @@
       10,
       350,
       10,
-      0,
       15
     ],
     "obj": [
@@ -812,7 +810,6 @@
       "da_agua",
       "ini",
       "re_agua_por",
-      "re_fuego_por",
       "re_agua"
     ]
   },
@@ -1171,18 +1168,6 @@
     ]
   },
   "Anillo de micholobo": {
-    "obj": [
-      "vi",
-      "fo",
-      "sue",
-      "sa",
-      "inv",
-      "da_neu",
-      "da_tierra",
-      "da_agua",
-      "ret_pm",
-      "da_cri"
-    ],
     "min": [
       186,
       35,
@@ -1206,6 +1191,18 @@
       10,
       4,
       10
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "sue",
+      "sa",
+      "inv",
+      "da_neu",
+      "da_tierra",
+      "da_agua",
+      "ret_pm",
+      "da_cri"
     ]
   },
   "Collar Lunar": {

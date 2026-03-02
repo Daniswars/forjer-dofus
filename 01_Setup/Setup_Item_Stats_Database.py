@@ -123,9 +123,9 @@ ITEM_STATS = {
         "obj": ["vi", "inte", "sa", "cri", "da_fuego", "cu", "re_tierra_por", "re_aire_por", "da_cri"]
     },
     "Anillo de styx": {
-        "min": [186, 58, 30, 3, 9, 280, 10, 0, 8],
-        "max": [200, 60, 40, 3, 10, 350, 10, 0, 15],
-        "obj": ["vi", "sue", "sa", "cri", "da_agua", "ini", "re_agua_por", "re_fuego_por", "re_agua"]
+        "min": [186, 58, 30, 3, 9, 280, 10, 3],
+        "max": [200, 60, 40, 3, 10, 350, 10, 15],
+        "obj": ["vi", "sue", "sa", "cri", "da_agua", "ini", "re_agua_por", "re_agua"]
     },
     "Alianza golosona": {
         "min": [236, 55, 55, 30, 1, 11, 11, 0, 330, 7, 7, 7, 4],

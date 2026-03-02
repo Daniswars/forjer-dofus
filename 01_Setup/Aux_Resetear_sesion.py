@@ -185,8 +185,9 @@ def restart_dofus_and_click_forge(objeto_seleccionado: str):
     - cierra la ventana del juego si está abierta,
     - hace click en 'Play' del launcher,
     - selecciona el personaje (click en CHARACTER_PLAY_BUTTON_COORD),
-    - espera la carga y verifica (pre_check_game_status_with_timeout).
-    NO realiza ninguna acción de workbench ni coloca objetos.
+    - espera la carga y verifica (pre_check_game_status_with_timeout),
+    - hace click en el workbench (1626, 1154).
+    NO realiza ninguna acción de colocación de objetos.
     """
     print("--- Starting Dofus session reset (no workbench actions) ---")
     print(f"Ignoring objeto_seleccionado='{objeto_seleccionado}' for session reset.")
@@ -234,7 +235,14 @@ def restart_dofus_and_click_forge(objeto_seleccionado: str):
             print("Failed to confirm game loaded within timeout. Session reset incomplete.")
             return False
 
-        print("--- Session reset completed successfully (no workbench actions performed) ---")
+        # 5. NUEVO: Click en el workbench para abrirlo
+        WORKBENCH_COORD = (1626, 1154)
+        print(f"Clicking workbench at {WORKBENCH_COORD} to open it...")
+        pyautogui.click(WORKBENCH_COORD[0], WORKBENCH_COORD[1])
+        time.sleep(2)  # Esperar a que se abra la ventana del workbench
+        print("Workbench clicked and opened.")
+
+        print("--- Session reset completed successfully (workbench opened) ---")
         return True
 
     except gw.PyGetWindowException as e:

@@ -235,36 +235,97 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     pass
                 log(f"Tiempo de ejecución >=30min ({int(elapsed_since_reset)}s). Realizando reseteo de sesión.")
                 # intentar resetear sesión solo si tenemos el módulo disponible
+                reset_ok = False
                 try:
                     if SessionReset is not None and hasattr(SessionReset, "restart_dofus_and_click_forge"):
                         # pasar el nombre del item actual si está disponible
                         current_item = shared_state.get("current_item", "") or ""
                         try:
-                            ok = SessionReset.restart_dofus_and_click_forge(current_item)
+                            reset_ok = bool(SessionReset.restart_dofus_and_click_forge(current_item))
+                            log(f"restart_dofus_and_click_forge resultado: {reset_ok}")
                         except Exception as e:
-                            ok = False
+                            reset_ok = False
                             log(f"Excepción al ejecutar restart_dofus_and_click_forge: {e}")
-                        # NOTIFICACIÓN POR CORREO: informar del intento de reseteo
-                        try:
-                            if Correo is not None:
-                                if ok:
-                                    Correo.send_mail(current_item, "Reseteo sesión - OK")
-                                else:
-                                    Correo.send_mail(current_item, "Reseteo sesión - FALLÓ")
-                                log("Correo enviado sobre reseteo de sesión.")
-                            else:
-                                log("Extra_Correo no disponible: no se envió notificación por correo.")
-                        except Exception as e:
-                            log(f"WARNING: fallo enviando correo de reseteo: {e}")
-                        # si la función devuelve None, considerarla como False (intento fallido)
-                        if ok:
-                            log("Reseteo de sesión realizado correctamente.")
-                        else:
-                            log("Reseteo de sesión intentado pero falló o devolvió False.")
                     else:
                         log("SessionReset no disponible: no se puede resetear sesión automáticamente.")
                 except Exception as e:
-                    log(f"ERROR durante reseteo de sesión: {e}")
+                    log(f"ERROR durante intento de reseteo: {e}")
+                    reset_ok = False
+
+                # --- NUEVO: leer kamas tras el reset y guardar como fallo ---
+                try:
+                    import Extra_get_kamas as KamasModule
+                    try:
+                        kamas_finales = KamasModule.get_kamas()
+                        log(f"Kamas leídas tras reset: {kamas_finales}")
+                    except Exception as e:
+                        kamas_finales = None
+                        log(f"WARNING: no se pudieron leer kamas tras reset: {e}")
+                except Exception as e:
+                    kamas_finales = None
+                    log(f"DEBUG: Extra_get_kamas no importable: {e}")
+
+                # Guardar en la base como fallo (si se puede) usando Extra_Database.agregar_datos preferentemente
+                try:
+                    attempts_now = int(shared_state.get("exo_attempts", 0))
+                except Exception:
+                    attempts_now = 0
+
+                if kamas_finales is not None:
+                    try:
+                        import Extra_Database as DB
+                        try:
+                            DB.agregar_datos(
+                                objeto_seleccionado=current_item or "Unknown_Item_After_Reset",
+                                intentos=attempts_now,
+                                kamas_iniciales=None,
+                                kamas_finales=kamas_finales,
+                                exito=0,
+                                tiempo_medio_intento=None,
+                                modo_encadenado_activo=True
+                            )
+                            log("Guardado en DB (Extra_Database) como fallo tras reset con kamas finales.")
+                        except Exception as e:
+                            log(f"WARNING: Extra_Database.agregar_datos falló: {e}")
+                            # intentar fallback a DataSaver.finalize_session si existe
+                            if DataSaver is not None and hasattr(DataSaver, "finalize_session"):
+                                try:
+                                    DataSaver.finalize_session(
+                                        objeto=current_item or "Unknown_Item_After_Reset",
+                                        intentos=attempts_now,
+                                        exito=0,
+                                        tiempo_medio_intento=None,
+                                        modo_encadenado_activo=True,
+                                        precio_objeto_base=None,
+                                        precio_venta_objeto_final=None,
+                                        tipo_exo=None,
+                                        kamas_iniciales_arg=None
+                                    )
+                                    log("Fallback: DataSaver.finalize_session usado para guardar fallo tras reset.")
+                                except Exception as e2:
+                                    log(f"ERROR: fallback DataSaver.finalize_session falló: {e2}")
+                    except Exception as e:
+                        log(f"DEBUG: Extra_Database no importable o fallo al usarlo: {e}")
+                        # intentar fallback a DataSaver.finalize_session si existe y kamas leídas
+                        if DataSaver is not None and hasattr(DataSaver, "finalize_session"):
+                            try:
+                                DataSaver.finalize_session(
+                                    objeto=current_item or "Unknown_Item_After_Reset",
+                                    intentos=attempts_now,
+                                    exito=0,
+                                    tiempo_medio_intento=None,
+                                    modo_encadenado_activo=True,
+                                    precio_objeto_base=None,
+                                    precio_venta_objeto_final=None,
+                                    tipo_exo=None,
+                                    kamas_iniciales_arg=None
+                                )
+                                log("Fallback: DataSaver.finalize_session usado para guardar fallo tras reset.")
+                            except Exception as e2:
+                                log(f"ERROR: fallback DataSaver.finalize_session falló: {e2}")
+                else:
+                    log("No se dispone de lectura de kamas; no se guardará fallo con kamas finales.")
+
                 # Resetar contadores y timmer (siempre actualizar el timer para evitar bucle inmediato)
                 shared_state["exo_attempts"] = 0
                 shared_state["rune_clicks"] = 0
@@ -273,8 +334,25 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     status_var.set("Sesión reseteada. Reintentando Setup...")
                 except Exception:
                     pass
-                # pequeña espera para estabilizar ventanas antes de volver a setup
+
+                # Llamar a Setup inmediatamente para reiniciar el ciclo (intentamos obtener nuevo item_name/item_stats)
+                try:
+                    log("Llamando a Setup inmediatamente tras reseteo para reiniciar el ciclo...")
+                    try:
+                        new_setup = Main_Setup.main()
+                        # si Main_Setup devuelve (name, stats) lo mostramos en log
+                        if isinstance(new_setup, tuple) and len(new_setup) >= 2:
+                            new_name = new_setup[0]
+                            log(f"Setup devuelto: {new_name}")
+                            shared_state["current_item"] = new_name
+                    except Exception as e:
+                        log(f"WARNING: Falló llamada a Main_Setup.main() tras reseteo: {e}")
+                except Exception as e:
+                    log(f"ERROR: excepción al invocar Setup tras reset: {e}")
+
+                # pequeña espera para estabilizar ventanas antes de volver a setup/mage
                 time.sleep(1.0)
+                # continuar el bucle para entrar en la fase de setup (o usar lo que Setup ya hizo)
                 continue
         except Exception as e:
             print("WARNING: fallo comprobando/ejecutando session reset:", e)
