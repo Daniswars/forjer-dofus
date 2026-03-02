@@ -394,8 +394,17 @@
     ]
   },
   "Alianza Natomia": {
+    "obj": [
+      "vi",
+      "inte",
+      "sa",
+      "al",
+      "da_fuego",
+      "pla",
+      "ret_pm"
+    ],
     "min": [
-      336,
+      337,
       66,
       21,
       1,
@@ -411,15 +420,6 @@
       15,
       15,
       8
-    ],
-    "obj": [
-      "vi",
-      "inte",
-      "sa",
-      "al",
-      "da_fuego",
-      "pla",
-      "ret_pm"
     ]
   },
   "Anillo de brus": {

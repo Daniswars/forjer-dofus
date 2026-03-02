@@ -577,10 +577,14 @@ def build_ui():
     import tkinter.ttk as ttk
 
     ctk.set_appearance_mode("dark")
-    ctk.set_default_color_theme("blue")
+    # aspecto más "futurista" (usar tema oscuro y acento azul oscuro)
+    try:
+        ctk.set_default_color_theme("dark-blue")
+    except Exception:
+        ctk.set_default_color_theme("blue")
     root = ctk.CTk()
     root.title("Forjamagia - Orquestador")
-    root.geometry("760x480")
+    root.geometry("980x640")
     root.resizable(True, True)
 
     FG = "#e6e6e6"
@@ -625,49 +629,64 @@ def build_ui():
     stop_btn.grid(row=0, column=2, padx=10, pady=14)
 
     def open_db_editor():
-        # Editor sencillo: búsqueda + lista de items + subir/bajar stats + guardar
+        # Editor mejorado: filas editables con botones + / - para min/max y detección de cambios sin guardar
         stats_db = Setup_Item_Stats_Database.load_item_stats_txt()
         if not isinstance(stats_db, dict):
             stats_db = {}
 
         editor = ctk.CTkToplevel(root)
-        editor.title("Editor de Item Stats (TXT)")
-        editor.geometry("760x420")
+        editor.title("Editor de Item Stats (TXT) - Futurista")
+        editor.geometry("980x600")
         editor.grab_set()
 
         top = ctk.CTkFrame(editor)
         top.pack(fill="x", padx=12, pady=10)
-        ctk.CTkLabel(top, text="Buscar:").pack(side="left", padx=(6, 6))
+        ctk.CTkLabel(top, text="Buscar:", width=60).pack(side="left", padx=(6, 6))
         search_var = tk.StringVar()
-        search_entry = ctk.CTkEntry(top, textvariable=search_var, width=200)
+        search_entry = ctk.CTkEntry(top, textvariable=search_var, width=300)
         search_entry.pack(side="left")
+        ctk.CTkButton(top, text="Nuevo Item", width=120, command=lambda: create_new_item()).pack(side="right", padx=6)
 
         body = ctk.CTkFrame(editor)
         body.pack(fill="both", expand=True, padx=12, pady=6)
 
-        # Lista de items
-        items_list = tk.Listbox(body, height=14)
-        items_list.grid(row=0, column=0, rowspan=3, padx=(8, 6), pady=8, sticky="ns")
+        # Lista de items (Listbox simple)
+        items_frame = ctk.CTkFrame(body, width=260)
+        items_frame.grid(row=0, column=0, sticky="ns")
+        items_list = tk.Listbox(items_frame, height=24)
+        items_list.pack(fill="both", expand=True, padx=6, pady=6)
 
-        # Lista de stats
-        stats_list = tk.Listbox(body, height=14, width=40)
-        stats_list.grid(row=0, column=1, rowspan=3, padx=6, pady=8, sticky="nsew")
-
+        # Área editable (scrollable)
+        edit_frame = ctk.CTkFrame(body)
+        edit_frame.grid(row=0, column=1, sticky="nsew", padx=(8,0))
         body.grid_columnconfigure(1, weight=1)
 
-        form = ctk.CTkFrame(body)
-        form.grid(row=0, column=2, padx=8, pady=8, sticky="n")
-        ctk.CTkLabel(form, text="obj").grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(form, text="min").grid(row=1, column=0, sticky="w")
-        ctk.CTkLabel(form, text="max").grid(row=2, column=0, sticky="w")
-        obj_var = tk.StringVar()
-        min_var = tk.StringVar()
-        max_var = tk.StringVar()
-        ctk.CTkEntry(form, textvariable=obj_var, width=120).grid(row=0, column=1, pady=2)
-        ctk.CTkEntry(form, textvariable=min_var, width=120).grid(row=1, column=1, pady=2)
-        ctk.CTkEntry(form, textvariable=max_var, width=120).grid(row=2, column=1, pady=2)
+        scroll = ctk.CTkScrollableFrame(edit_frame, corner_radius=6)
+        scroll.pack(fill="both", expand=True, padx=6, pady=6)
 
-        current_item = {"name": None, "rows": []}
+        # botones de control abajo
+        controls = ctk.CTkFrame(editor)
+        controls.pack(fill="x", padx=12, pady=8)
+        save_btn = ctk.CTkButton(controls, text="Guardar TXT", width=140)
+        save_btn.pack(side="right", padx=8)
+        cancel_btn = ctk.CTkButton(controls, text="Cerrar (Salir)", width=140)
+        cancel_btn.pack(side="right", padx=8)
+
+        current_item = {"name": None, "rows": []}  # rows = list of [obj, min, max]
+        row_widgets = []  # referencias a widgets por fila para actualizacion
+        unsaved = {"flag": False}
+
+        def mark_unsaved(v=True):
+            unsaved["flag"] = bool(v)
+            # customtkinter no permite fg_color=None; usar "transparent" para transparencia por defecto
+            try:
+                save_btn.configure(fg_color="#007acc" if unsaved["flag"] else "transparent")
+            except Exception:
+                # fallback seguro: solo cambiar estado visual mínimo
+                try:
+                    save_btn.configure(state="normal" if unsaved["flag"] else "disabled")
+                except Exception:
+                    pass
 
         def refresh_items():
             items_list.delete(0, "end")
@@ -676,20 +695,102 @@ def build_ui():
                 if not q or q in name.lower():
                     items_list.insert("end", name)
 
+        def build_rows_ui():
+            # limpiar
+            for w in row_widgets:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+            row_widgets.clear()
+
+            for idx, r in enumerate(current_item["rows"]):
+                frame = ctk.CTkFrame(scroll, corner_radius=6)
+                frame.pack(fill="x", padx=4, pady=4)
+                # stat name
+                lbl = ctk.CTkLabel(frame, text=r[0], width=160, anchor="w")
+                lbl.grid(row=0, column=0, padx=8, pady=6, sticky="w")
+                # min controls
+                min_lbl = ctk.CTkLabel(frame, text=f"Min: {r[1]}", width=90)
+                min_lbl.grid(row=0, column=1, padx=4)
+                def make_min_inc(i):
+                    return lambda: change_value(i, 1, kind="min")
+                def make_min_dec(i):
+                    return lambda: change_value(i, -1, kind="min")
+                ctk.CTkButton(frame, text="-", width=28, height=28, command=make_min_dec(idx)).grid(row=0, column=2, padx=2)
+                ctk.CTkButton(frame, text="+", width=28, height=28, command=make_min_inc(idx)).grid(row=0, column=3, padx=2)
+                # max controls
+                max_lbl = ctk.CTkLabel(frame, text=f"Max: {r[2]}", width=90)
+                max_lbl.grid(row=0, column=4, padx=8)
+                def make_max_inc(i):
+                    return lambda: change_value(i, 1, kind="max")
+                def make_max_dec(i):
+                    return lambda: change_value(i, -1, kind="max")
+                ctk.CTkButton(frame, text="-", width=28, height=28, command=make_max_dec(idx)).grid(row=0, column=5, padx=2)
+                ctk.CTkButton(frame, text="+", width=28, height=28, command=make_max_inc(idx)).grid(row=0, column=6, padx=2)
+                # move / delete
+                def make_move(i, d):
+                    return lambda: move_row(i, d)
+                ctk.CTkButton(frame, text="↑", width=34, command=make_move(idx, -1)).grid(row=0, column=7, padx=6)
+                ctk.CTkButton(frame, text="↓", width=34, command=make_move(idx, 1)).grid(row=0, column=8, padx=2)
+                def make_del(i):
+                    return lambda: delete_row(i)
+                ctk.CTkButton(frame, text="Eliminar", width=80, fg_color="#b02a2a", command=make_del(idx)).grid(row=0, column=9, padx=8)
+
+                # almacenar referencias para actualizar etiquetas fácilmente
+                row_widgets.append(frame)
+                # guardar referencias a labels para refrescar texto al cambiar
+                frame._min_lbl = min_lbl
+                frame._max_lbl = max_lbl
+
+        def change_value(idx, delta, kind="min"):
+            try:
+                if idx < 0 or idx >= len(current_item["rows"]):
+                    return
+                if kind == "min":
+                    current_item["rows"][idx][1] = max(0, int(current_item["rows"][idx][1]) + int(delta))
+                else:
+                    current_item["rows"][idx][2] = max(0, int(current_item["rows"][idx][2]) + int(delta))
+                # actualizar labels
+                w = row_widgets[idx]
+                w._min_lbl.configure(text=f"Min: {current_item['rows'][idx][1]}")
+                w._max_lbl.configure(text=f"Max: {current_item['rows'][idx][2]}")
+                mark_unsaved(True)
+            except Exception as e:
+                print("ERROR change_value:", e)
+
+        def move_row(i, delta):
+            j = i + delta
+            if j < 0 or j >= len(current_item["rows"]):
+                return
+            current_item["rows"][i], current_item["rows"][j] = current_item["rows"][j], current_item["rows"][i]
+            build_rows_ui()
+            mark_unsaved(True)
+
+        def delete_row(i):
+            if i < 0 or i >= len(current_item["rows"]):
+                return
+            del current_item["rows"][i]
+            build_rows_ui()
+            mark_unsaved(True)
+
         def load_item(name):
-            stats_list.delete(0, "end")
+            # construir rows desde stats_db
             if not name or name not in stats_db:
+                current_item["name"] = None
+                current_item["rows"] = []
+                build_rows_ui()
                 return
             s = stats_db[name]
             rows = []
             for i, obj in enumerate(s.get("obj", [])):
                 mn = s.get("min", [])[i] if i < len(s.get("min", [])) else 0
                 mx = s.get("max", [])[i] if i < len(s.get("max", [])) else 0
-                rows.append([obj, mn, mx])
+                rows.append([obj, int(mn), int(mx)])
             current_item["name"] = name
             current_item["rows"] = rows
-            for r in rows:
-                stats_list.insert("end", f"{r[0]} | {r[1]} | {r[2]}")
+            build_rows_ui()
+            mark_unsaved(False)
 
         def on_item_select(evt=None):
             sel = items_list.curselection()
@@ -698,71 +799,74 @@ def build_ui():
             name = items_list.get(sel[0])
             load_item(name)
 
-        def on_stat_select(evt=None):
-            sel = stats_list.curselection()
-            if not sel:
-                return
-            idx = sel[0]
-            try:
-                obj_var.set(current_item["rows"][idx][0])
-                min_var.set(str(current_item["rows"][idx][1]))
-                max_var.set(str(current_item["rows"][idx][2]))
-            except Exception:
-                pass
-
-        def update_row():
-            sel = stats_list.curselection()
-            if not sel:
-                return
-            idx = sel[0]
-            try:
-                obj = obj_var.get().strip()
-                mn = int(min_var.get().strip() or "0")
-                mx = int(max_var.get().strip() or "0")
-                current_item["rows"][idx] = [obj, mn, mx]
-                stats_list.delete(idx)
-                stats_list.insert(idx, f"{obj} | {mn} | {mx}")
-            except Exception:
-                messagebox.showwarning("Error", "Valores inválidos.")
-
-        def move_row(delta):
-            sel = stats_list.curselection()
-            if not sel:
-                return
-            i = sel[0]
-            j = i + delta
-            if j < 0 or j >= len(current_item["rows"]):
-                return
-            rows = current_item["rows"]
-            rows[i], rows[j] = rows[j], rows[i]
-            load_item(current_item["name"])
-            stats_list.selection_set(j)
-            on_stat_select()
-
         def save_db():
             name = current_item["name"]
             if not name:
+                messagebox.showwarning("Aviso", "Seleccione un item para guardar.")
                 return
             rows = current_item["rows"]
             stats_db[name] = {
                 "obj": [r[0] for r in rows],
-                "min": [r[1] for r in rows],
-                "max": [r[2] for r in rows],
+                "min": [int(r[1]) for r in rows],
+                "max": [int(r[2]) for r in rows],
             }
-            Setup_Item_Stats_Database.save_item_stats_txt(stats_db)
-            messagebox.showinfo("Guardado", "DB guardada en TXT.")
-            refresh_items()
+            ok = Setup_Item_Stats_Database.save_item_stats_txt(stats_db)
+            if ok:
+                messagebox.showinfo("Guardado", "DB guardada en TXT.")
+                mark_unsaved(False)
+                refresh_items()
+            else:
+                messagebox.showwarning("Error", "No se pudo guardar el TXT.")
 
+        def create_new_item():
+            name = messagebox.askstring("Nuevo item", "Nombre del nuevo item:")
+            if not name:
+                return
+            if name in stats_db:
+                messagebox.showwarning("Existe", "El item ya existe.")
+                return
+            stats_db[name] = {"obj": [], "min": [], "max": []}
+            refresh_items()
+            # seleccionar creado
+            try:
+                idx = list(sorted(stats_db.keys())).index(name)
+                items_list.selection_clear(0, "end")
+                items_list.selection_set(idx)
+                items_list.see(idx)
+                load_item(name)
+            except Exception:
+                pass
+            mark_unsaved(True)
+
+        def add_stat_to_current(obj_name="new_stat", mn=0, mx=0):
+            if not current_item["name"]:
+                messagebox.showwarning("Aviso", "Seleccione un item primero.")
+                return
+            current_item["rows"].append([obj_name, int(mn), int(mx)])
+            build_rows_ui()
+            mark_unsaved(True)
+
+        # Bindings y evento cierre
         items_list.bind("<<ListboxSelect>>", on_item_select)
-        stats_list.bind("<<ListboxSelect>>", on_stat_select)
         search_entry.bind("<KeyRelease>", lambda e: refresh_items())
 
-        btns = ctk.CTkFrame(editor)
-        btns.pack(fill="x", padx=12, pady=8)
-        ctk.CTkButton(btns, text="Actualizar fila", command=update_row).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Subir", command=lambda: move_row(-1)).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Bajar", command=lambda: move_row(1)).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Guardar TXT", command=save_db).pack(side="right", padx=6)
+        # botones auxiliares (añadir stat)
+        aux_btns = ctk.CTkFrame(controls)
+        aux_btns.pack(side="left")
+        ctk.CTkButton(aux_btns, text="Añadir stat", command=lambda: add_stat_to_current()).pack(side="left", padx=6)
+        save_btn.configure(command=save_db)
+
+        def on_editor_close():
+            if unsaved["flag"]:
+                resp = messagebox.askyesnocancel("Cambios sin guardar", "Hay cambios sin guardar. ¿Guardar antes de cerrar?\n\nSi eliges Cancel, permanecerás en el editor.")
+                if resp is None:
+                    return  # cancel -> no cerrar
+                if resp:
+                    save_db()
+            editor.destroy()
+
+        cancel_btn.configure(command=on_editor_close)
+        editor.protocol("WM_DELETE_WINDOW", on_editor_close)
 
         refresh_items()
 
