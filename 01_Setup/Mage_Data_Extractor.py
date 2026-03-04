@@ -29,14 +29,15 @@ STAT_COORDS = [
 ]
 
 ONE_EQUIVALENTS = [
-    "1", "l", "I", "L", "|", "!", "lalcance", "lalcanze", "lalcanse", "lal", r"lalcanc\n", "lin", "lin"
+    "1", "l", "I", "L", "|", "!", "lin", "talc"
 ]
 
 # --- Añadido: helper para comparar tokens con ONE_EQUIVALENTS manejando '\n' ---
 def matches_one_equivalent(token):
     """
     Devuelve True si `token` coincide (tras normalizar) con alguno de los elementos
-    de ONE_EQUIVALENTS. Normaliza salto de línea '\n' como literal '\\n' y elimina espacios.
+    de ONE_EQUIVALENTS, O si contiene "alc" (alcance, alcanze, etc.).
+    Normaliza salto de línea '\n' como literal '\\n' y elimina espacios.
     """
     if not token:
         return False
@@ -44,6 +45,11 @@ def matches_one_equivalent(token):
     t = str(token).replace('\u200b', '').lower()
     t = t.replace('\r', '').replace('\n', r'\n')
     t = re.sub(r'\s+', '', t)
+
+    # NUEVA REGLA: si contiene "alc" es equivalente a 1
+    if 'alc' in t:
+        return True
+
     for eq in ONE_EQUIVALENTS:
         eq_s = str(eq).lower()
         # asegurar que los patrones que contienen escape se traten de la misma forma

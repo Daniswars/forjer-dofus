@@ -85,18 +85,52 @@ def todas_estadisticas_al_60(estadisticas_actuales, estadisticas_min):
             return False
     return True
 
+def select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats):
+    """
+    Función auxiliar que encapsula la lógica de selección de columna X para una stat.
+    Evita duplicación masiva del mismo código en múltiples lugares.
+    """
+    if obj in runas_re_emp:
+        return COLUMNAS_X[1]
+    elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
+        return COLUMNAS_X[0]
+    elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
+        return COLUMNAS_X[0]
+    elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
+        return COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+    elif obj in runas_da:
+        if actual + 3 <= maximo and actual > 12:
+            return COLUMNAS_X[1]
+        else:
+            return COLUMNAS_X[0]
+    elif obj in runas_sa:
+        if actual + 10 <= maximo:
+            return COLUMNAS_X[2]
+        elif actual + 3 <= maximo:
+            return COLUMNAS_X[1]
+        else:
+            return COLUMNAS_X[0]
+    elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
+        if obj in runas_vi:
+            return COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
+        elif obj in runas_ini:
+            return COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
+        else:
+            return COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
+    else:
+        return COLUMNAS_X[0]
+
 def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planned_clicks=None, max_clicks_per_stat=None):
     """
-    Versión extendida:
-     - mantiene la lógica original de selección de columna/X para cada stat (NO la modifico).
-     - si planned_clicks es una lista, ejecuta esas pulsaciones en rondas arriba->abajo
-       (ajustando si ya se hizo un click en fases previas).
-     - valida lectura antes de actuar (suma/nonzeros) y devuelve True si hizo clicks.
-     - NO sobrepasa stats_max: cada plan se recorta para cumplir max permitido y se actualiza 'actual' local tras cada click.
+    Versión mejorada: aplicar múltiples clicks por stat en un ciclo si es necesario y beneficioso.
+    - Primera pasada: crítica (<30% del mínimo) - 1 click por stat.
+    - Segunda pasada: alcanzar mínimo (<min) - clicks repetidos en ciclos mientras sea útil.
+    - Tercera pasada: aplicar planned_clicks si se pasó.
+    - Cuarta pasada: doble ciclo para resistencias si siguen bajas.
     """
     ensure_ui_active()
 
-    # Listas de tipos de runas (prioridades) - idénticas a la implementación previa
+    # Listas de tipos de runas (prioridades)
     runas_tochas = ["pa", "pm", "al", "inv", "da", "cri"]
     runas_re_por = ["re_agua_por", "re_aire_por", "re_tierra_por", "re_fuego_por", "re_neu_por"]
     runas_re = ["re_agua", "re_aire", "re_tierra", "re_fuego", "re_neu", "re_cri"]
@@ -106,21 +140,16 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
     runas_cu = ["cu"]
     runas_pla_hui = ["pla", "hui"]
     runas_esquivas_retiras = ["ret_pa", "ret_pm", "es_pa", "es_pm"]
-    runas_basic_stats = ["fo", "inte", "agi", "sue"]
+    runas_basic_stats = ["fo", "inte", "agi", "su"]
     runas_potencia = ["pot"]
     runas_ini = ["ini"]
     runas_da_20 = ["da"]
     runa_prospe = ["prospe"]
     runas_re_emp = ["re_emp"]
 
-    # Usar la longitud de stats_min como fuente de verdad
     n = len(stats_min)
 
-    # Aviso si hay desalineación, pero no abortar
-    if len(stats_actuales) != n:
-        print(f"AVISO: stats_actuales tiene {len(stats_actuales)} entradas pero stats_min tiene {n}. Se procesarán {n} filas (recortando o rellenando con 0).")
-
-    # Validación mínima de lectura antes de tocar UI
+    # Validación mínima de lectura
     suma = sum(stats_actuales) if stats_actuales else 0
     nonzeros = sum(1 for v in (stats_actuales or []) if v != 0)
     min_nonzeros = max(1, n // 6)
@@ -128,11 +157,11 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
         print("mage_introduce_runes: lectura dudosa (suma={}, nonzeros={}). No se aplicarán runas.".format(suma, nonzeros))
         return False
 
-    # Registrar índices que ya han recibido click en la pasada crítica/intermedia para evitar doble click inmediato
     clicked_indices = set()
     did_click_any = False
 
-    # --- FASE CRÍTICA (idéntica a la lógica previa): manejar <30% del mínimo ---
+    # --- FASE CRÍTICA: manejar <30% del mínimo ---
+    print("\n=== FASE CRÍTICA: stats < 30% del mínimo ===")
     for i in range(n):
         actual = stats_actuales[i] if i < len(stats_actuales) else 0
         minimo = stats_min[i]
@@ -140,123 +169,82 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
         maximo = stats_max[i] if i < len(stats_max) else 9999
         y = get_fila_y(i)
 
-        if not obj:
+        if not obj or actual >= minimo * 0.3:
             continue
 
-        if actual < minimo * 0.3:
-            # Selección exacta de X mantenida (NO la modifico)
-            if obj in runas_re_emp:
-                x = COLUMNAS_X[1]
-            elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
-                x = COLUMNAS_X[0]
-            elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
-                x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
-                x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
+        x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
 
-            elif obj in runas_da:
-                if actual + 3 <= maximo and actual > 12:
-                    x = COLUMNAS_X[1]
-                else:
-                    x = COLUMNAS_X[0]
+        print(f"[CRÍTICO] click en ({x},{y}) para stat {obj} (actual {actual} < 30% min {minimo}) idx {i}")
+        try:
+            click(x, y, reason=f"critical_stat_{i}")
+            did_click_any = True
+            inc = estimate_increment_for(obj, x)
+            stats_actuales[i] = min(stats_actuales[i] + inc, maximo)
+        except Exception as e:
+            print("ERROR al clickar (crítico):", e)
+        ensure_ui_active()
+        clicked_indices.add(i)
 
-            elif obj in runas_potencia or obj in runas_sa:
-                if actual + 10 <= maximo:
-                    x = COLUMNAS_X[2]
-                elif actual + 3 <= maximo:
-                    x = COLUMNAS_X[1]
-                else:
-                    x = COLUMNAS_X[0]
-            elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
+    # --- PASADA INTERMEDIA MEJORADA: clickar múltiples veces por stat en ciclos ---
+    print("\n=== PASADA INTERMEDIA: alcanzar mínimo (múltiples clicks por ciclo) ===")
+    max_passes = 8  # máximo de pasadas para evitar loops infinitos
+    pass_count = 0
+
+    while pass_count < max_passes:
+        pass_count += 1
+        any_clicked_this_pass = False
+
+        for i in range(n):
+            actual = stats_actuales[i] if i < len(stats_actuales) else 0
+            minimo = stats_min[i]
+            obj = stats_obj[i] if i < len(stats_obj) else ""
+            maximo = stats_max[i] if i < len(stats_max) else 9999
+
+            if not obj or actual >= minimo:
+                continue
+
+            # NUEVA REGLA: vida solo 1 click máximo, no múltiples
+            if obj in runas_vi and i in clicked_indices:
+                print(f"[PASADA {pass_count}] saltando stat {obj} (vida): ya recibió 1 click en fase crítica")
+                continue
+
+            x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
+            inc = estimate_increment_for(obj, x)
+
+            # Comprobar si el click sería útil y no superaría máximo
+            if inc <= 0 or (actual + inc) > maximo:
+                continue
+
+            y = get_fila_y(i)
+            print(f"[PASADA {pass_count}] click en ({x},{y}) para stat {obj} (actual {actual} < min {minimo}) idx {i}")
+            try:
+                click(x, y, reason=f"intermediate_stat_{i}_pass{pass_count}")
+                did_click_any = True
+                any_clicked_this_pass = True
+                stats_actuales[i] = min(stats_actuales[i] + inc, maximo)
+                # Si es vida, pausa más larga
                 if obj in runas_vi:
-                    x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
-                elif obj in runas_ini:
-                    x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
-                else:
-                    x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
-            else:
-                x = COLUMNAS_X[0]
-
-            print(f"[CRITICO] click en ({x},{y}) para stat {obj} (actual {actual} < 30% min {minimo}) idx {i}")
-            try:
-                click(x, y)
-                did_click_any = True
-                # actualizar valor local para evitar overclick en fases siguientes
-                try:
-                    inc = estimate_increment_for(obj, x)
-                    stats_actuales[i] = stats_actuales[i] + inc
-                except Exception:
-                    pass
-            except Exception as e:
-                print("ERROR al clickar (crítico):", e)
-            ensure_ui_active()
-            clicked_indices.add(i)
-
-    # --- PASADA INTERMEDIA (idéntica a la lógica previa): intentar stats < min si no fueron clicadas ---
-    for i in range(n):
-        if i in clicked_indices:
-            continue
-
-        actual = stats_actuales[i] if i < len(stats_actuales) else 0
-        minimo = stats_min[i]
-        obj = stats_obj[i] if i < len(stats_obj) else ""
-        maximo = stats_max[i] if i < len(stats_max) else 9999
-        y = get_fila_y(i)
-
-        if not obj:
-            continue
-
-        if actual < minimo:
-            # Selección exacta de X mantenida (NO la modifico)
-            if obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
-                x = COLUMNAS_X[0]
-            elif obj in runas_sa:
-                x = COLUMNAS_X[2] if maximo >= 35 and actual + 10 <= maximo else COLUMNAS_X[1]
-            elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
-                x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
-                x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
-
-            elif obj in runas_da:
-                if actual + 3 <= maximo and actual > 12:
-                    x = COLUMNAS_X[1]
-                else:
-                    x = COLUMNAS_X[0]
-
-            elif obj in runas_vi:
-                x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
-            elif obj in runas_ini:
-                x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
-            elif obj in runas_basic_stats:
-                x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
-            else:
-                x = COLUMNAS_X[0]
-
-            print(f"[PASADA INTERMEDIA] click en ({x},{y}) para stat {obj} (actual {actual} < min {minimo}) idx {i}")
-            try:
-                click(x, y)
-                did_click_any = True
-                # actualizar valor local para evitar overclick en fases siguientes
-                try:
-                    inc = estimate_increment_for(obj, x)
-                    stats_actuales[i] = stats_actuales[i] + inc
-                except Exception:
-                    pass
+                    time.sleep(0.08)
             except Exception as e:
                 print("ERROR al clickar en pasada intermedia:", e)
             ensure_ui_active()
             clicked_indices.add(i)
 
-    # --- NUEVA FASE: ejecutar planned_clicks (si se pasó) como rondas arriba->abajo ---
+        # Si no se hizo ningún click en esta pasada, salir del bucle
+        if not any_clicked_this_pass:
+            print(f"Fin de pasada intermedia en pass {pass_count}: sin clicks en esta ronda.")
+            break
+
+    # --- NUEVA FASE: ejecutar planned_clicks como rondas arriba->abajo ---
     if planned_clicks:
-        # normalizar plan a tamaño n y convertir a enteros
+        print("\n=== FASE PLANIFICADA: ejecutar planned_clicks ===")
         plan = list(planned_clicks)[:n] + [0] * max(0, n - len(planned_clicks))
-        # si ya se hizo 1 click en clicked_indices restamos 1 del plan para no duplicar
+
+        # restar 1 del plan si ya se hizo 1 click en clicked_indices
         for i in range(n):
             if i in clicked_indices and plan[i] > 0:
                 plan[i] = max(0, plan[i] - 1)
 
-        # obtener límite por stat desde parámetro o Main.shared_state
         max_extra = 3
         if max_clicks_per_stat is None:
             try:
@@ -265,214 +253,109 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
             except Exception:
                 pass
 
-        # asegurar límites y, CRUCIAL: no pasarse del stats_max calculando máximo permitido por stat
+        # asegurar límites y no pasarse del stats_max
         for i in range(n):
             actual = stats_actuales[i] if i < len(stats_actuales) else 0
             maximo = stats_max[i] if i < len(stats_max) else 9999
-            # estimar incremento por click según columna que usaríamos (reutilizamos lógica para calcular x)
             obj = stats_obj[i] if i < len(stats_obj) else ""
-            # determinar columna prevista (misma lógica que arriba para coherencia)
-            if obj in runas_re_emp:
-                col_x = COLUMNAS_X[1]
-            elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
-                col_x = COLUMNAS_X[0]
-            elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
-                col_x = COLUMNAS_X[0]
-            elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
-                col_x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
-            elif obj in runas_da:
-                if actual + 3 <= maximo and actual > 12:
-                    x = COLUMNAS_X[1]
-                else:
-                    x = COLUMNAS_X[0]
-
-            elif obj in runas_potencia or obj in runas_sa:
-                if actual + 10 <= maximo:
-                    col_x = COLUMNAS_X[2]
-                elif actual + 3 <= maximo:
-                    col_x = COLUMNAS_X[1]
-                else:
-                    col_x = COLUMNAS_X[0]
-            elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
-                if obj in runas_vi:
-                    col_x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
-                elif obj in runas_ini:
-                    col_x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
-                else:
-                    col_x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
-            else:
-                col_x = COLUMNAS_X[0]
-
-            # mapear col_x a incremento estimado
-            # reemplazado por estimación robusta
+            col_x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
             inc = estimate_increment_for(obj, col_x)
 
-            # máximo clicks permitidos sin superar maximo
             if inc > 0:
                 allowed = max(0, (maximo - actual) // inc)
             else:
                 allowed = 0
-            # no pasarse del límite por stat
+
             plan[i] = min(plan[i], max_extra, allowed)
 
-            # NUEVO: si la stat es de vida (vi), forzamos como máximo 1 click por iteración
-            try:
-                name_lower = str(obj).lower() if obj else ""
-                if "vi" in name_lower or obj in runas_vi:
+            # MODIFICADO: vida máximo 1 click TOTAL (si ya recibió en crítica, no más)
+            if obj in runas_vi:
+                if i in clicked_indices:
+                    plan[i] = 0  # Ya recibió 1 click, no más
+                else:
                     plan[i] = min(plan[i], 1)
-            except Exception:
-                pass
 
         if any(p > 0 for p in plan):
             print("Ejecutando plan adicional de clicks por stat (rondas)...")
-            # Ejecutar rondas: una pulsación por stat por ronda, de arriba->abajo
             while any(p > 0 for p in plan):
                 for i in range(n):
                     if plan[i] <= 0:
                         continue
-                    # recalcular columna X exactamente con la misma lógica de selección previa
+
                     actual = stats_actuales[i] if i < len(stats_actuales) else 0
                     maximo = stats_max[i] if i < len(stats_max) else 9999
                     obj = stats_obj[i] if i < len(stats_obj) else ""
-                    # misma selección de X (idéntica a la usada arriba)
-                    if obj in runas_re_emp:
-                        x = COLUMNAS_X[1]
-                    elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
-                        x = COLUMNAS_X[0]
-                    elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
-                        x = COLUMNAS_X[0]
-                    elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
-                        x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
-
-                    elif obj in runas_da:
-                        if actual + 3 <= maximo and actual > 12:
-                            x = COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[0]
-
-                    elif obj in runas_potencia or obj in runas_sa:
-                        if actual + 10 <= maximo:
-                            x = COLUMNAS_X[2]
-                        elif actual + 3 <= maximo:
-                            x = COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[0]
-                    elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
-                        if obj in runas_vi:
-                            x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
-                        elif obj in runas_ini:
-                            x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
-                    else:
-                        x = COLUMNAS_X[0]
-
-                    # REVISIÓN CRUCIAL: recomprobar si el click sigue siendo necesario justo antes
                     minimo = stats_min[i]
+
+                    x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
                     inc = estimate_increment_for(obj, x)
-                    # si ya alcanza mínimo, cancelar plan para ese índice
-                    if actual >= minimo:
-                        plan[i] = 0
-                        continue
-                    # si un click adicional lo desbordaría sobre el máximo, cancelar
-                    if inc <= 0 or (actual + inc) > maximo:
+
+                    # Recomprobar justo antes
+                    if actual >= minimo or inc <= 0 or (actual + inc) > maximo:
                         plan[i] = 0
                         continue
 
                     y = get_fila_y(i)
                     try:
-                        #click(x, y)
+                        click(x, y, reason=f"planned_stat_{i}")
                         did_click_any = True
-                        # intentar incrementar contador global de runa clicks si existe
+                        stats_actuales[i] = min(stats_actuales[i] + inc, maximo)
                         try:
                             import RUN as MainModule
                             MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1
                         except Exception:
                             pass
-                        # actualizar actual local para evitar sobrepasar el máximo en rondas siguientes
-                        inc = estimate_increment_for(obj, x)
-                        stats_actuales[i] = min(stats_actuales[i] + inc, stats_max[i] if i < len(stats_max) else stats_actuales[i] + inc)
                     except Exception as e:
                         print("ERROR al ejecutar click planificado:", e)
                     plan[i] -= 1
-                    # PAUSA: si la stat es vida, dejar un poco más para que el juego procese bien ese +50
-                    if obj and ("vi" in str(obj).lower() or obj in runas_vi):
+                    if obj in runas_vi:
                         time.sleep(0.08)
                     else:
                         time.sleep(0.045)
-                # fin de ronda
+
                 ensure_ui_active()
                 time.sleep(0.07)
 
             # --- DOBLE CICLO ESPECÍFICO PARA RESISTENCIAS ---
-            # Hacemos una pasada adicional SOLO para stats de resistencia (runas_re, runas_re_por)
-            # Si tras las rondas siguen por debajo del mínimo y no se supera stats_max, se aplica 1 click extra.
+            print("\n=== DOBLE CICLO: resistencias ===")
             resist_indices = []
             for i in range(n):
                 obj = stats_obj[i] if i < len(stats_obj) else ""
-                # excluir runas de vida aquí (no deben recibir doble ciclo)
-                if not obj or (obj in runas_vi):
+                if not obj or obj in runas_vi:
                     continue
-                if obj and (obj in runas_re or obj in runas_re_por):
-                    # comprobar si sigue por debajo del mínimo y tiene margen para 1 click más
+                if obj in runas_re or obj in runas_re_por:
                     actual = stats_actuales[i]
                     minimo = stats_min[i]
                     maximo = stats_max[i] if i < len(stats_max) else 9999
-                    # estimación del incremento por columna según la lógica usada: preferimos col1 (inc=3) para resistencias
                     inc = 3
-                    # si aplicar inc no superará el máximo y sigue siendo útil (mejora hacia el mínimo) -> añadir
                     if actual < minimo and (actual + inc) <= maximo:
                         resist_indices.append(i)
+
             if resist_indices:
                 print(f"Doble ciclo resistencias: aplicando click extra en índices: {resist_indices}")
                 for i in resist_indices:
                     obj = stats_obj[i] if i < len(stats_obj) else ""
+
+                    # NUEVA REGLA: vida no entra en doble ciclo
+                    if obj in runas_vi:
+                        print(f"[RESIST-DOUBLE] saltando {obj} (vida): solo 1 click máximo")
+                        continue
+
                     actual = stats_actuales[i]
                     maximo = stats_max[i] if i < len(stats_max) else 9999
-                    # reutilizar la misma selección de columna/X para consistencia
-                    if obj in runas_re_emp:
-                        x = COLUMNAS_X[1]
-                    elif obj in runas_tochas or obj in runas_re_por or obj in runas_da_20:
-                        x = COLUMNAS_X[0]
-                    elif obj in runas_cu or obj in runas_esquivas_retiras or obj in runas_pla_hui:
-                        x = COLUMNAS_X[0]
-                    elif obj in runas_re or obj in runas_potencia or obj in runa_prospe or obj in runas_re_emp:
-                        x = COLUMNAS_X[1] if actual + 3 <= maximo else COLUMNAS_X[0]
 
-                    elif obj in runas_da:
-                        if actual + 3 <= maximo and actual > 12:
-                            x = COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[0]
-
-                    elif obj in runas_potencia or obj in runas_sa:
-                        if actual + 10 <= maximo:
-                            x = COLUMNAS_X[2]
-                        elif actual + 3 <= maximo:
-                            x = COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[0]
-                    elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
-                        if obj in runas_vi:
-                            x = COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
-                        elif obj in runas_ini:
-                            x = COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
-                        else:
-                            x = COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
-                    else:
-                        x = COLUMNAS_X[0]
+                    x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
                     y = get_fila_y(i)
-                    # REVISIÓN: comprobar de nuevo antes del click que sigue siendo necesario
                     inc = estimate_increment_for(obj, x)
+
                     if actual >= stats_min[i] or inc <= 0 or (actual + inc) > maximo:
                         continue
+
                     try:
-                        click(x, y)
+                        click(x, y, reason=f"resist_double_cycle_{i}")
                         did_click_any = True
-                        # actualizar valor local (inc = 3 por defecto para resistencias)
-                        inc = estimate_increment_for(obj, x)
-                        stats_actuales[i] = min(stats_actuales[i] + inc, stats_max[i] if i < len(stats_max) else stats_actuales[i] + inc)
+                        stats_actuales[i] = min(stats_actuales[i] + inc, maximo)
                         try:
                             import RUN as MainModule
                             MainModule.shared_state["rune_clicks"] = MainModule.shared_state.get("rune_clicks", 0) + 1
@@ -484,17 +367,13 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 ensure_ui_active()
                 time.sleep(0.08)
 
-    # --- AÑADIDO: click final seguro para evitar "clicks fantasma" posteriores ---
-    # Si se hicieron clicks en esta ejecución, ejecutar un click final en la coordenada segura
-    # (evita que el cursor quede en una zona que provoque pulsaciones fantasma).
+    # --- CLICK FINAL SEGURO ---
     try:
         if did_click_any:
             SAFE_CLICK_X, SAFE_CLICK_Y = 2679, 1151
             try:
-                # usar nuestra función click para que se registre en los logs
                 click(SAFE_CLICK_X, SAFE_CLICK_Y, reason="safe_final")
                 time.sleep(0.06)
-                # mover cursor a zona neutra para evitar que quede sobre un elemento interactivo
                 NEUTRAL_X, NEUTRAL_Y = 100, 100
                 try:
                     pyautogui.moveTo(NEUTRAL_X, NEUTRAL_Y, duration=0.04)
@@ -506,10 +385,8 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
             except Exception:
                 pass
     except Exception:
-        # no interrumpir la lógica por fallo en el click final
         pass
 
-    # devolvemos True si se hicieron clicks en alguna fase
     return bool(did_click_any)
 
 # --- NUEVAS FUNCIONES: reintentos y saneamiento de primera fila ---
@@ -529,7 +406,6 @@ def capture_with_retries(capture_func, attempts=3, wait_between=0.4):
         if attempt < attempts:
             print("Lectura vacía/dudosa: reintentando captura OCR...")
             time.sleep(wait_between)
-    # devolver la última lectura aunque sea cero
     return valores, texto
 
 def sanitize_initial_values(valores_actuales, stats_min_len):
@@ -544,7 +420,6 @@ def sanitize_initial_values(valores_actuales, stats_min_len):
         if valores_actuales[0] == 0 and valores_actuales[1] > 0:
             print("Saneando primera lectura: descartando primera fila porque sale 0 y la segunda tiene valor.")
             return valores_actuales[1:]
-    # si hay muchos elementos y stats_min es más corto, no tocar aquí (se recortará después)
     return valores_actuales
 
 # --- NUEVO: asegurar que el root del proyecto esté en sys.path para imports locales ---

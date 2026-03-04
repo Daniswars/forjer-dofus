@@ -39,44 +39,21 @@ def main():
         if Setup_Read_First_Rune_Name.read_new_item_name() == "Runa Ga PA":
             print("Texto 'Runa Ga PA' detectado correctamente.")
         else:
-
             # 3: X=2540, Y=623 haga click aqui
             pyautogui.click(2540, 623)
             step("3) Click en (2540, 623) realizado.")
 
-            time.sleep(1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(0.1)
-            pyautogui.scroll(-600)
-            time.sleep(1)
+            # 7 scrolls simples abajo
+            print("Haciendo 7 scrolls abajo...")
+            for i in range(7):
+                print(f"  Scroll {i+1}/7")
+                pyautogui.scroll(-600)
+                time.sleep(0.3)
+            print("✓ 7 scrolls completados.")
 
-            '''
-
-            # 4: X=2499, Y=722 mueva aqui el raton y haga scroll down
-            pyautogui.moveTo(2499, 710)
-            pyautogui.moveTo(2499, 722)
-
-            time.sleep(1)
-            # scroll down (valor negativo)
-            pyautogui.scroll(-600)
-            step("4) Movido a (2499, 722) y scroll down realizado.")
-            time.sleep(1)
-            
-            '''
-
-        # 8: X=1144, Y=1362 haga click aqui
+        # 8: X=2494, Y=898 haga click aqui
         pyautogui.click(2494, 898)
-        step("8) Click en (1144, 1362) realizado.")
+        step("8) Click en (2494, 898) realizado.")
 
         print("Secuencia completada.")
     except KeyboardInterrupt:
