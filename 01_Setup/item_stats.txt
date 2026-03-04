@@ -207,6 +207,16 @@
     ]
   },
   "Amargura de Belladona": {
+    "obj": [
+      "vi",
+      "sa",
+      "pot",
+      "re_agua_por",
+      "re_aire_por",
+      "hui",
+      "ret_pa",
+      "re_cri"
+    ],
     "min": [
       236,
       40,
@@ -214,7 +224,6 @@
       5,
       5,
       7,
-      0,
       17,
       6
     ],
@@ -225,20 +234,8 @@
       5,
       5,
       10,
-      10,
       20,
       10
-    ],
-    "obj": [
-      "vi",
-      "sa",
-      "pot",
-      "re_agua_por",
-      "re_aire_por",
-      "hui",
-      "pla",
-      "ret_pa",
-      "re_cri"
     ]
   },
   "Anillo Colette": {
@@ -1477,7 +1474,7 @@
       "es_pm"
     ]
   },
-  "Anillo crustico": {
+  "Anillo cruastico": {
     "min": [
       336,
       71,

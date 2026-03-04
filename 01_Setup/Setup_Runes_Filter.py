@@ -44,12 +44,35 @@ def main():
             pyautogui.click(2540, 623)
             step("3) Click en (2540, 623) realizado.")
 
+            time.sleep(1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(0.1)
+            pyautogui.scroll(-600)
+            time.sleep(1)
+
+            '''
+
             # 4: X=2499, Y=722 mueva aqui el raton y haga scroll down
-            pyautogui.moveTo(2499, 722, duration=0.5)
-            time.sleep(0.2)
+            pyautogui.moveTo(2499, 710)
+            pyautogui.moveTo(2499, 722)
+
+            time.sleep(1)
             # scroll down (valor negativo)
             pyautogui.scroll(-600)
             step("4) Movido a (2499, 722) y scroll down realizado.")
+            time.sleep(1)
+            
+            '''
 
         # 8: X=1144, Y=1362 haga click aqui
         pyautogui.click(2494, 898)

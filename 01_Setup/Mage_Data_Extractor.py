@@ -11,7 +11,7 @@ pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 
 # Coordenadas de las filas (stats)
 general_x1 = 1552
-general_x2 = 1600
+general_x2 = 1610
 STAT_COORDS = [
     (general_x1, 756, general_x2+50, 823),
     (general_x1, 823, general_x2, 891),

@@ -102,7 +102,7 @@ def get_kamas():
         print(f"DEBUG_GET_KAMAS: OCR attempt {attempt + 1}/{max_retries_ocr}...")
 
         # Mejorar estabilidad: mover ratón antes de captura (ya presente)
-        pyautogui.moveTo(2697, 1075)
+        pyautogui.click(2697, 1075)
         time.sleep(0.2)
 
         # Capture and preprocess image for Kamas

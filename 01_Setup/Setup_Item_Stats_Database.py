@@ -1,14 +1,67 @@
 """
-Módulo de solo base de datos: dado el nombre de un anillo devuelve sus estadísticas.
+Módulo de base de datos: gestión de estadísticas de items con traducción de nombres.
 Funciones públicas:
 - get_item_stats(name) -> dict | None
 - list_items() -> list[str]
+- get_stat_display_name(code) -> str
+- get_stat_category(code) -> str
 """
 
 import json
 from pathlib import Path
 
 STATS_TXT_PATH = Path(__file__).with_name("item_stats.txt")
+
+# Mapeo de códigos de stats a nombres legibles y categorías
+STAT_NAMES = {
+    # Vida
+    "vi": ("Vida", "Vital"),
+    # Atributos principales
+    "fo": ("Fuerza", "Atributo"),
+    "inte": ("Inteligencia", "Atributo"),
+    "sue": ("Suerte", "Atributo"),
+    "agi": ("Agilidad", "Atributo"),
+    # Combate
+    "sa": ("Sagacidad", "Combate"),
+    "cri": ("Crítico", "Combate"),
+    "pot": ("Potencia", "Combate"),
+    "al": ("Alineación", "Combate"),
+    "inv": ("Invocación", "Combate"),
+    "da": ("Daño", "Combate"),
+    # Daños especiales
+    "da_neu": ("Daño Neutro", "Daño Especial"),
+    "da_tierra": ("Daño Tierra", "Daño Especial"),
+    "da_fuego": ("Daño Fuego", "Daño Especial"),
+    "da_agua": ("Daño Agua", "Daño Especial"),
+    "da_aire": ("Daño Aire", "Daño Especial"),
+    "da_cri": ("Daño Crítico", "Daño Especial"),
+    "da_tram": ("Daño Trampa", "Daño Especial"),
+    "da_emp": ("Daño Empeño", "Daño Especial"),
+    # Resistencias porcentuales
+    "re_neu_por": ("Res. Neutro %", "Resistencia %"),
+    "re_tierra_por": ("Res. Tierra %", "Resistencia %"),
+    "re_fuego_por": ("Res. Fuego %", "Resistencia %"),
+    "re_agua_por": ("Res. Agua %", "Resistencia %"),
+    "re_aire_por": ("Res. Aire %", "Resistencia %"),
+    # Resistencias fijas
+    "re_neu": ("Res. Neutro", "Resistencia"),
+    "re_tierra": ("Res. Tierra", "Resistencia"),
+    "re_fuego": ("Res. Fuego", "Resistencia"),
+    "re_agua": ("Res. Agua", "Resistencia"),
+    "re_aire": ("Res. Aire", "Resistencia"),
+    # Especiales
+    "cu": ("Cura", "Especial"),
+    "pla": ("Planar", "Especial"),
+    "hui": ("Huida", "Especial"),
+    "prospe": ("Prosperidad", "Especial"),
+    "ini": ("Iniciativa", "Especial"),
+    "pa": ("P.A.", "Especial"),
+    "pm": ("P.M.", "Especial"),
+    "ret_pa": ("Retorno P.A.", "Especial"),
+    "ret_pm": ("Retorno P.M.", "Especial"),
+    "es_pa": ("Escudo P.A.", "Especial"),
+    "es_pm": ("Escudo P.M.", "Especial"),
+}
 
 ITEM_STATS = {
     "Anillo de vueloceronte": {
@@ -218,7 +271,7 @@ ITEM_STATS = {
         "max": [250, 60, 50, 3, 1, 12, 10, 10, 5],
         "obj": ["vi", "sue", "sa", "cri", "al", "da_agua", "re_fuego_por", "pla", "es_pm"]
     },
-    "Anillo crustico": {
+    "Anillo cruastico": {
         "min": [336, 71, 21, 2, 11, 11, 7, 7, 6],
         "max": [350, 80, 40, 2, 12, 12, 7, 10, 10],
         "obj": ["vi", "fo", "sa", "cri", "da_neu", "da_tierra", "re_agua_por", "pla", "ret_pa"]
@@ -378,6 +431,35 @@ if isinstance(_loaded, dict):
     ITEM_STATS = _loaded
 else:
     save_item_stats_txt(ITEM_STATS)
+
+
+def get_stat_display_name(code: str) -> str:
+    """Devuelve el nombre legible de una stat o el código si no existe."""
+    if code in STAT_NAMES:
+        return STAT_NAMES[code][0]
+    return code.upper()
+
+
+def get_stat_category(code: str) -> str:
+    """Devuelve la categoría de una stat."""
+    if code in STAT_NAMES:
+        return STAT_NAMES[code][1]
+    return "Otros"
+
+
+def get_all_stat_codes() -> list:
+    """Devuelve lista ordenada de todos los códigos de stats conocidos."""
+    return sorted(STAT_NAMES.keys())
+
+
+def get_stats_by_category(category: str) -> list:
+    """Devuelve lista de códigos de stats de una categoría."""
+    return sorted([code for code, (_, cat) in STAT_NAMES.items() if cat == category])
+
+
+def get_all_categories() -> list:
+    """Devuelve lista de categorías únicas."""
+    return sorted(set(cat for _, cat in STAT_NAMES.values()))
 
 
 # Bloque de prueba mínimo
