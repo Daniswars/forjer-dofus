@@ -10,7 +10,7 @@ from pytesseract import Output
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 
 # Coordenadas de las filas (stats)
-general_x1 = 1552
+general_x1 = 1552 # puede que 52 mejor
 general_x2 = 1610
 STAT_COORDS = [
     (general_x1, 756, general_x2+50, 823),
@@ -29,68 +29,54 @@ STAT_COORDS = [
 ]
 
 ONE_EQUIVALENTS = [
-    "1", "l", "I", "L", "|", "!", "lin", "talc"
+    "1", "l", "I", "L", "|", "!", "i"
 ]
 
-# --- Añadido: helper para comparar tokens con ONE_EQUIVALENTS manejando '\n' ---
-def matches_one_equivalent(token):
-    """
-    Devuelve True si `token` coincide (tras normalizar) con alguno de los elementos
-    de ONE_EQUIVALENTS, O si contiene "alc" (alcance, alcanze, etc.).
-    Normaliza salto de línea '\n' como literal '\\n' y elimina espacios.
-    """
-    if not token:
-        return False
-    # normalizar token: quitar zero-width, bajar a minúsculas y reemplazar salto real por la secuencia \n
-    t = str(token).replace('\u200b', '').lower()
-    t = t.replace('\r', '').replace('\n', r'\n')
-    t = re.sub(r'\s+', '', t)
-
-    # NUEVA REGLA: si contiene "alc" es equivalente a 1
-    if 'alc' in t:
-        return True
-
-    for eq in ONE_EQUIVALENTS:
-        eq_s = str(eq).lower()
-        # asegurar que los patrones que contienen escape se traten de la misma forma
-        eq_s = eq_s.replace('\r', '').replace('\n', r'\n')
-        eq_s = re.sub(r'\s+', '', eq_s)
-        if t == eq_s:
-            return True
-    return False
-
 def normalize_number(text):
-    t = (text or "")
+    """
+    Normaliza texto OCR a número entero.
+    Reglas:
+    1. Si texto vacío -> None
+    2. Si contiene "alc" o "Alc" y empieza con O/0 -> 0 (caso "Oalc")
+    3. Si es exactamente equivalente a "1" -> 1
+    4. Si contiene "%r" -> 9 (regla específica)
+    5. Normalizar O->0, l/I/L->1
+    6. Extraer dígitos y convertir a int
+    """
+    if not text:
+        return None
+
+    # Limpiar saltos de línea
+    t = str(text).replace('\r', '').replace('\n', '').replace('\\n', '').strip()
     if not t:
         return None
 
-    # Eliminar saltos de línea reales y la secuencia literal '\n' si aparecen
-    try:
-        t = t.replace('\r', '').replace('\n', '')
-        t = t.replace('\\n', '')
-    except Exception:
-        pass
+    # Caso especial: "Oalc", "0alc" -> 0
+    t_lower = t.lower()
+    if 'alc' in t_lower and (t_lower.startswith('o') or t_lower.startswith('0')):
+        return 0
 
-    # Si el token se parece a uno de los equivalentes a "1", devolver 1
-    try:
-        if matches_one_equivalent(t):
-            return 1
-    except Exception:
-        pass
+    # Caso especial: "%r" -> 9
+    if '%r' in t_lower or '% r' in t_lower:
+        return 9
 
-    t = t.strip()
-    # Normalizaciones comunes de OCR
-    t = t.replace('\u200b', '')  # zero-width
+    # Caso exacto: equivalentes de "1"
+    t_clean = t.replace(' ', '').lower()
+    if t_clean in [x.lower() for x in ONE_EQUIVALENTS]:
+        return 1
+
+    # Normalización estándar
     t = t.replace('O', '0').replace('o', '0')
-    t = t.replace('I', '1').replace('l', '1').replace('L', '1')
-    t = t.replace(' ', '')
-    # quitar símbolos comunes
-    t = re.sub(r'[^\d+-]', '', t)
-    if t in ['', '+', '-']:
+    t = t.replace('I', '1').replace('l', '1').replace('L', '1').replace('|', '1')
+
+    # Extraer solo dígitos
+    digits = re.sub(r'[^\d]', '', t)
+    if not digits:
         return None
+
     try:
-        return int(t)
-    except Exception:
+        return int(digits)
+    except:
         return None
 
 def is_noise_line(line):
@@ -126,31 +112,19 @@ def ocr_stat_image_config(img, lang='spa', config='--oem 3 --psm 7 -c tessedit_c
         return pytesseract.image_to_string(img, lang='eng', config=config)
 
 def extract_number_from_text(text):
-    # Eliminar saltos de línea reales y la secuencia literal '\n' antes de procesar
-    line = (text or "")
-    try:
-        line = line.replace('\r', '').replace('\n', '')
-        line = line.replace('\\n', '')
-    except Exception:
-        pass
-    line = line.replace('O', '0').replace('o', '0').strip()
-    if is_noise_line(line):
+    """Extrae número de texto OCR usando normalize_number"""
+    if not text:
         return 0
-    # limpiar miles y espacios
-    line_clean = re.sub(r'[^\d+-]', '', line)
-    if not line_clean:
+
+    # Limpiar
+    line = str(text).replace('\r', '').replace('\n', '').replace('\\n', '').strip()
+
+    # Si es ruido (muchos caracteres repetidos), ignorar
+    if re.search(r'(.)\1{4,}', line):
         return 0
-    try:
-        return int(line_clean)
-    except Exception:
-        # intentar buscar grupos de dígitos
-        digit_groups = re.findall(r'\d+', line)
-        if digit_groups:
-            try:
-                return int(digit_groups[-1])
-            except Exception:
-                pass
-    return 0
+
+    num = normalize_number(line)
+    return num if num is not None else 0
 
 def _best_numeric_token_from_image(img, config):
     """
@@ -164,35 +138,29 @@ def _best_numeric_token_from_image(img, config):
         best_num = None
         best_conf = -100
         best_text = ""
+
         for tok, conf in zip(texts, confs):
             if not tok or str(tok).strip() == "":
                 continue
-            # limpiar token y eliminar saltos de línea reales y literales
-            tok_clean = tok.replace('O', '0').replace('o', '0').replace('l', '1').replace('I', '1')
-            try:
-                tok_clean = tok_clean.replace('\r', '').replace('\n', '')
-                tok_clean = tok_clean.replace('\\n', '')
-            except Exception:
-                pass
-            if re.search(r'\d', tok_clean):
-                # convertir conf seguro
+
+            # Normalizar token
+            n = normalize_number(tok)
+            if n is not None:
                 try:
                     conf_v = int(float(conf))
-                except Exception:
+                except:
                     conf_v = -1
-                n = normalize_number(tok_clean)
-                if n is not None and conf_v > best_conf:
+
+                if conf_v > best_conf:
                     best_conf = conf_v
                     best_num = n
-                    # guardar texto original saneado para debug (sin saltos)
-                    try:
-                        best_text = str(tok).replace('\r', '').replace('\n', '').replace('\\n', '')
-                    except Exception:
-                        best_text = str(tok)
+                    best_text = str(tok).replace('\r', '').replace('\n', '').replace('\\n', '')
+
         if best_num is not None:
             return best_num, best_text, best_conf
-    except Exception:
+    except:
         pass
+
     return 0, "", -100
 
 def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers=8, debug_save_folder=None, item_stats=None):
@@ -212,6 +180,7 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
     start_time = time.time()
     numbers = []
     raw_texts = []
+    raw_texts_crudos = []  # NUEVO: texto OCR sin limpiar por fila para debug real
 
     coords = STAT_COORDS if num_stats is None else STAT_COORDS[:max(0, int(num_stats))]
     if not coords:
@@ -355,22 +324,19 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
         results = list(executor.map(_process_crop, rel_boxes))
 
     for num, text in results:
-        # limpiar textos brutos para que no contengan '\n' o '\\n'
-        try:
-            txt_clean = (text or "")
-            txt_clean = txt_clean.replace('\r', '').replace('\n', '').replace('\\n', '')
-        except Exception:
-            txt_clean = text
+        # Guardar texto crudo sin modificar
+        txt_raw = "" if text is None else str(text)
+        raw_texts_crudos.append(txt_raw)
 
-        # Si el texto limpio corresponde a un equivalente de "1", forzar número y texto a '1'
-        try:
-            if matches_one_equivalent(txt_clean):
-                num = 1
-                txt_clean = '1'
-        except Exception:
-            pass
+        # Procesar texto para obtener valor final
+        txt_clean = txt_raw.replace('\r', '').replace('\n', '').replace('\\n', '').strip()
 
-        numbers.append(num)
+        # Re-normalizar el número con las reglas actualizadas
+        final_num = normalize_number(txt_clean)
+        if final_num is None:
+            final_num = num  # usar el valor ya detectado si normalize falla
+
+        numbers.append(final_num)
         raw_texts.append(txt_clean)
 
     # REGLA ACTUALIZADA: si existe min_list o max_list y el valor leído supera 2*min
@@ -426,6 +392,12 @@ def capture_and_read_stats(save_folder=None, lang='spa', num_stats=None, workers
     # prints de depuración: valores y textos leídos
     print(f"Tiempo captura+OCR: {elapsed:.2f}s - nonzeros: {sum(1 for v in numbers if v!=0)}")
     print("Valores extraídos:", numbers)
+
+    # NUEVO: dump crudo real de OCR por fila (antes de limpieza/normalización)
+    print("Textos OCR CRUDOS por fila (repr):")
+    for idx, txt in enumerate(raw_texts_crudos, start=1):
+        print(f"  Stat {idx}: {repr(txt)}")
+
     print("Textos OCR brutos por fila:")
     for idx, txt in enumerate(raw_texts, start=1):
         print(f"  Stat {idx}: {repr(txt)}")

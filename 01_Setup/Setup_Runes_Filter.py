@@ -19,6 +19,29 @@ def step(msg):
     print(msg)
     time.sleep(DELAY_BETWEEN)
 
+def _normalize_text(t: str) -> str:
+    return " ".join((t or "").strip().lower().split())
+
+def _is_target_rune(t: str) -> bool:
+    normalized = _normalize_text(t)
+    return normalized in {"runa ga pa", "runa ga pm"}
+
+def _correction_scrolls():
+    # 3: X=2540, Y=623 haga click aqui (ANTES de scrolls)
+    pyautogui.click(2540, 623)
+    step("3) Click en (2540, 623) realizado.")
+
+    print("Corrección: 10 scrolls arriba y 7 scrolls abajo...")
+    for i in range(10):
+        print(f"  Scroll arriba {i+1}/10")
+        pyautogui.scroll(600)
+        time.sleep(0.25)
+    for i in range(7):
+        print(f"  Scroll abajo {i+1}/7")
+        pyautogui.scroll(-600)
+        time.sleep(0.25)
+    print("✓ Corrección de scrolls completada.")
+
 def main():
     print(f"Comienzo en {PREP_COUNTDOWN} segundos. Muévete a la ventana objetivo o aborta (esquina superior izquierda).")
     for i in range(PREP_COUNTDOWN, 0, -1):
@@ -36,20 +59,19 @@ def main():
         pyautogui.write("runa", interval=TYPE_INTERVAL)
         step('2) Click en (2555, 572) y escrito "runa".')
 
-        if Setup_Read_First_Rune_Name.read_new_item_name() == "Runa Ga PA":
-            print("Texto 'Runa Ga PA' detectado correctamente.")
-        else:
-            # 3: X=2540, Y=623 haga click aqui
-            pyautogui.click(2540, 623)
-            step("3) Click en (2540, 623) realizado.")
+        max_retries = 30
+        for intento in range(1, max_retries + 1):
+            detected = Setup_Read_First_Rune_Name.read_new_item_name()
+            print(f"Verificación OCR intento {intento}: '{detected}'")
 
-            # 7 scrolls simples abajo
-            print("Haciendo 7 scrolls abajo...")
-            for i in range(7):
-                print(f"  Scroll {i+1}/7")
-                pyautogui.scroll(-600)
-                time.sleep(0.3)
-            print("✓ 7 scrolls completados.")
+            if _is_target_rune(detected):
+                print("Texto objetivo detectado correctamente ('Runa Ga PA' o 'Runa Ga PM').")
+                break
+
+            print("No es 'Runa Ga PA' ni 'Runa Ga PM'. Reaplicando corrección...")
+            _correction_scrolls()
+        else:
+            raise RuntimeError("No se pudo detectar 'Runa Ga PA' ni 'Runa Ga PM' tras múltiples intentos.")
 
         # 8: X=2494, Y=898 haga click aqui
         pyautogui.click(2494, 898)

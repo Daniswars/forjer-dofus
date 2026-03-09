@@ -76,6 +76,7 @@ def get_kamas():
     Ajustes: acepta totales grandes (hasta UPPER_LIMIT) para no descartar lecturas válidas.
     """
     print("\nDEBUG_GET_KAMAS: Starting kamas and rune value retrieval...")
+    print(f"DEBUG_GET_KAMAS: Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Wait for the 'maguear' text to confirm the correct screen state
     if not wait_for_maguear_text():
@@ -131,6 +132,12 @@ def get_kamas():
         print(f"DEBUG_GET_KAMAS: Extracted Runas: {valor_runas}")
         print(f"DEBUG_GET_KAMAS: Extracted Kamas: {valor_kamas}")
         print(f"DEBUG_GET_KAMAS: Calculated Total: {total_kamas}")
+
+        # NUEVO: Validación adicional - detectar si ambos valores son 0
+        if valor_runas == 0 and valor_kamas == 0:
+            print("WARNING_GET_KAMAS: Ambos valores son 0. Probable fallo de OCR. Reintentando...")
+            time.sleep(1)
+            continue
 
         # Sanity check: aceptar totales hasta UPPER_LIMIT
         if total_kamas > 0 and total_kamas <= UPPER_LIMIT:

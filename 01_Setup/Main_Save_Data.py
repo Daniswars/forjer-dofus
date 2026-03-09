@@ -42,7 +42,7 @@ def save_initial_kamas(objeto):
     store[objeto] = {"kamas_iniciales": int(kamas), "timestamp": datetime.now().isoformat()}
     _save_store(store)
     print(f"[Main_Save_Data] Kamas iniciales guardadas: {kamas} (objeto: {objeto})")
-    return kamas
+    return kamas  # <-- DEVOLVER el valor
 
 
 def finalize_session(objeto, intentos, exito, tiempo_medio_intento=None,

@@ -43,8 +43,15 @@ def introducir_exo():
             print("ERROR al introducir exo (pyautogui):", e)
             return False
     else:
-        print(f"Runa detectada: {nombre_runa}. No es exo PA/PM/Al. No se hace nada.")
-        return False
+        print(f"Runa detectada: {nombre_runa}. No es exo PA/PM/Al. Ejecutando Setup_Runes_Filter...")
+        try:
+            import Setup_Runes_Filter
+            Setup_Runes_Filter.main()
+            print("Setup_Runes_Filter completado. Reintentando...")
+            return introducir_exo()  # recursión para reintentar tras filtrar
+        except Exception as e:
+            print(f"ERROR al ejecutar Setup_Runes_Filter: {e}")
+            return False
 
 if __name__ == "__main__":
     ok = introducir_exo()

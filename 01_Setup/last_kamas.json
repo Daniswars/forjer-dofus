@@ -39,10 +39,6 @@
     "kamas_iniciales": 1775824610,
     "timestamp": "2026-02-20T19:54:37.290634"
   },
-  "Anillo Ancestral": {
-    "kamas_iniciales": 1662478275,
-    "timestamp": "2026-03-02T18:32:46.214906"
-  },
   "Sello del rey jugador": {
     "kamas_iniciales": 1714236751,
     "timestamp": "2026-02-25T13:56:25.988487"
@@ -55,16 +51,48 @@
     "kamas_iniciales": 0,
     "timestamp": "2026-03-02T17:46:49.273722"
   },
-  "Anillo de Maxilubo": {
-    "kamas_iniciales": 1660938640,
-    "timestamp": "2026-03-02T18:59:56.304090"
+  "Crueldad de Belladona": {
+    "kamas_iniciales": 1654942154,
+    "timestamp": "2026-03-04T22:12:05.705107"
   },
-  "Amargura de Belladona": {
-    "kamas_iniciales": 1529654512,
-    "timestamp": "2026-03-04T15:23:58.654103"
+  "Anillo de kukoloide": {
+    "kamas_iniciales": 1657179188,
+    "timestamp": "2026-03-04T21:52:55.665766"
   },
-  "Anillo de Noai Aludem": {
-    "kamas_iniciales": 1627576054,
-    "timestamp": "2026-03-04T15:55:19.185773"
+  "Anillo de grithril": {
+    "kamas_iniciales": 1655756455,
+    "timestamp": "2026-03-05T17:26:43.759129"
+  },
+  "Anillo Colette": {
+    "kamas_iniciales": 26190075,
+    "timestamp": "2026-03-07T21:40:49.977172"
+  },
+  "Anillo cruastico": {
+    "kamas_iniciales": 34736936,
+    "timestamp": "2026-03-07T20:01:29.983063"
+  },
+  "Ghulanillo": {
+    "kamas_iniciales": 36275389,
+    "timestamp": "2026-03-08T09:32:41.022946"
+  },
+  "Amuleto de la Bola": {
+    "kamas_iniciales": 37722114,
+    "timestamp": "2026-03-08T11:42:39.578262"
+  },
+  "Anillo de pio amarillo": {
+    "kamas_iniciales": 34761951,
+    "timestamp": "2026-03-09T10:54:13.153186"
+  },
+  "Amuleto del intrépido": {
+    "kamas_iniciales": 34761951,
+    "timestamp": "2026-03-09T10:54:33.318123"
+  },
+  "Anillo de Mandrin": {
+    "kamas_iniciales": 24392042,
+    "timestamp": "2026-03-09T19:25:32.590297"
+  },
+  "Anillo Ancestral": {
+    "kamas_iniciales": 23047633,
+    "timestamp": "2026-03-09T19:39:15.440736"
   }
 }

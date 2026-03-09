@@ -58,9 +58,13 @@ def estimate_increment_for(obj, x):
         name = ""
     if x == COLUMNAS_X[0]:
         # columna pequeña
+        if "ini" in name:
+            return 10
         return 1
     if x == COLUMNAS_X[1]:
         # columna media
+        if "ini" in name:
+            return 30
         # para resistencia/sustracciones suele ser +3
         if "re" in name or "res" in name or "resistencia" in name:
             return 3
@@ -114,7 +118,12 @@ def select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runa
         if obj in runas_vi:
             return COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
         elif obj in runas_ini:
-            return COLUMNAS_X[2] if actual + 100 <= maximo else COLUMNAS_X[1]
+            if actual + 100 <= maximo:
+                return COLUMNAS_X[2]
+            elif actual + 30 <= maximo:
+                return COLUMNAS_X[1]
+            else:
+                return COLUMNAS_X[0]
         else:
             return COLUMNAS_X[2] if actual + 10 <= maximo else COLUMNAS_X[1]
     else:
@@ -140,7 +149,7 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
     runas_cu = ["cu"]
     runas_pla_hui = ["pla", "hui"]
     runas_esquivas_retiras = ["ret_pa", "ret_pm", "es_pa", "es_pm"]
-    runas_basic_stats = ["fo", "inte", "agi", "su"]
+    runas_basic_stats = ["fo", "inte", "agi", "sue"]
     runas_potencia = ["pot"]
     runas_ini = ["ini"]
     runas_da_20 = ["da"]

@@ -19,7 +19,7 @@ STAT_NAMES = {
     # Atributos principales
     "fo": ("Fuerza", "Atributo"),
     "inte": ("Inteligencia", "Atributo"),
-    "su": ("Suerte", "Atributo"),
+    "sue": ("Suerte", "Atributo"),
     "agi": ("Agilidad", "Atributo"),
     # Combate
     "sa": ("Sabiduría", "Atributo"),

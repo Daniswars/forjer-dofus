@@ -83,57 +83,31 @@ def find_dofus_window_title() -> str | None:
 
 def close_dofus_window(window_title: str):
     """
-    Closes the Dofus game window by bringing it to the foreground and sending Alt+F4.
-    If that fails, it attempts to kill the process.
+    Cierra el proceso de Dofus directamente usando taskkill para evitar diálogos del sistema.
     """
-    print(f"Attempting to close Dofus window: '{window_title}'...")
-    dofus_windows = gw.getWindowsWithTitle(window_title)
+    print(f"Cerrando proceso de Dofus directamente...")
 
-    if not dofus_windows:
-        print(f"Window '{window_title}' not found or already closed. No action needed.")
-        return True  # Indicate successful "closing" if it's already gone
+    try:
+        import subprocess
+        # Buscar y matar todos los procesos de Dofus
+        for proc in psutil.process_iter(['pid', 'name']):
+            if "dofus" in proc.info['name'].lower():
+                print(f"Matando proceso: PID {proc.info['pid']}, Name: {proc.info['name']}")
+                try:
+                    # Usar taskkill /F para forzar cierre inmediato (sin diálogos)
+                    subprocess.run(['taskkill', '/F', '/PID', str(proc.info['pid'])],
+                                 capture_output=True, timeout=5)
+                    print(f"Proceso {proc.info['pid']} terminado.")
+                except Exception as e:
+                    print(f"Error al matar proceso {proc.info['pid']}: {e}")
 
-    dofus_window = dofus_windows[0]
+        time.sleep(2)  # Esperar a que los procesos terminen completamente
+        print("Todos los procesos de Dofus cerrados.")
+        return True
 
-    # Try Alt+F4 multiple times
-    for attempt in range(3):
-        if not is_window_open(window_title):
-            print(f"Window '{window_title}' closed after {attempt + 1} Alt+F4 attempts.")
-            return True  # Successfully closed
-
-        print(f"Attempt {attempt + 1}: Activating Dofus window and sending Alt+F4...")
-        try:
-            dofus_window.activate()  # Bring the window to the foreground
-            time.sleep(1.5)  # Give it ample time to become active
-
-            pyautogui.keyDown('alt')
-            pyautogui.press('f4')
-            pyautogui.keyUp('alt')
-            time.sleep(3)  # Give it some time to fully close
-
-        except Exception as e:
-            print(f"Error during Alt+F4 attempt {attempt + 1}: {e}")
-            time.sleep(1)  # Small pause before next attempt
-
-    # If Alt+F4 failed after multiple attempts, try to kill the process
-    if is_window_open(window_title):
-        print(f"Warning: Window '{window_title}' is still open after multiple Alt+F4 attempts.")
-        print("Attempting to forcefully close the Dofus process...")
-        try:
-            for proc in psutil.process_iter(['pid', 'name']):
-                # Adjust 'dofus.exe' if your Dofus client executable name is different
-                if "dofus.exe" in proc.info['name'].lower():
-                    print(f"Found Dofus process: PID {proc.info['pid']}, Name: {proc.info['name']}. Killing...")
-                    proc.kill()
-                    time.sleep(3)  # Give process time to terminate
-                    print("Dofus process killed.")
-                    return True
-            print("Could not find a Dofus process to kill.")
-            return False
-        except Exception as e:
-            print(f"Error attempting to kill Dofus process: {e}")
-            return False
-    return False  # Failed to close
+    except Exception as e:
+        print(f"Error al cerrar procesos de Dofus: {e}")
+        return False
 
 
 def read_text_from_screen(top_left: tuple, bottom_right: tuple, lang='eng', config='--psm 6') -> str:

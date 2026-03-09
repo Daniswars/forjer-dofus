@@ -109,9 +109,8 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
                   tiempo_medio_intento=None, modo_encadenado_activo=False,
                   precio_objeto_base=None, precio_venta_objeto_final=None, tipo_exo=None):
     """
-    Agrega datos de forjamagia a un archivo Excel, gestionando resultados de Success y fallo
-    en hojas separadas. Cuando se registra un "Success", los fallos previos del mismo
-    objeto en la hoja de fallos son eliminados.
+    Agrega datos de forjamagia a un archivo Excel.
+    NUEVO: Acepta kamas_iniciales=None para guardados intermedios (cada 10 intentos).
 
     Args:
         objeto_seleccionado (str): Nombre del objeto que se está forjamagueando.
@@ -129,6 +128,7 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
     # --- Configuración ---
     ruta_archivo_excel = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\20260213_Dofus3_Mage_Database.xlsx"
 
+    # CAMBIO: los fallos van a "Fallos Forjamagia" (no "Old")
     nombre_hoja_fallos = "Fallos Forjamagia"
     nombre_hoja_exitos = "Exitos Forjamagia"
 
@@ -144,7 +144,17 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
 
     # Convertir de forma segura a ints/floats (tolerante a tipos inesperados)
     intentos_safe = _safe_to_int(intentos, default=0)
-    kamas_iniciales_safe = _safe_to_int(kamas_iniciales, default=0)
+
+    # CAMBIO: Si kamas_iniciales es None, buscar el último valor guardado de kamas finales para este objeto
+    if kamas_iniciales is None:
+        print(f"DEBUG_KAMAS: kamas_iniciales es None. Buscando último valor guardado para '{objeto_seleccionado}'...")
+        kamas_iniciales_safe = _obtener_ultimas_kamas_finales(objeto_seleccionado, ruta_archivo_excel, nombre_hoja_fallos)
+        if kamas_iniciales_safe == 0:
+            print("WARNING: No se encontró valor previo. Usando kamas_finales como referencia.")
+            kamas_iniciales_safe = _safe_to_int(kamas_finales, default=0)
+    else:
+        kamas_iniciales_safe = _safe_to_int(kamas_iniciales, default=0)
+
     kamas_finales_safe = _safe_to_int(kamas_finales, default=0)
     tiempo_medio_safe = _safe_to_float(tiempo_medio_intento, default=0.0)
     precio_objeto_base_safe = _safe_to_int(precio_objeto_base, default=0)
@@ -241,8 +251,7 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
 
     # --- Variables comunes para la sesión actual ---
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-    # Inversion for this specific session: (Kamas_iniciales - Kamas_finales)
-    # A positive value means spending, a negative value means gaining.
+    # Inversión de la fila actual (fallo o éxito del ciclo actual)
     inversion_actual_sesion = kamas_iniciales - kamas_finales
     kamas_por_intento_actual_sesion = inversion_actual_sesion / intentos if intentos > 0 else 0
     tiempo_por_intento_actual_sesion = tiempo_medio_intento if tiempo_medio_intento is not None else 0.0  # Ensure float
@@ -257,16 +266,22 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
     if not es_success:
         print(f"DEBUG_FLOW: Resultado considerado 'Fail'. Añadiendo a la hoja '{nombre_hoja_fallos}'.")
 
-        # Ensure defaults for all fallo columns
+        # CAMBIO: Usar kamas_iniciales_safe (ya corregido arriba) en lugar de fallback a kamas_finales
+        kamas_iniciales_display = kamas_iniciales_safe if kamas_iniciales_safe > 0 else kamas_finales
+
+        # CAMBIO: inversión en fallos siempre basada en la fila (no en acumulado global)
+        inversion_fila = kamas_iniciales_display - kamas_finales
+        kamas_por_intento_fila = inversion_fila / intentos if intentos > 0 else 0.0
+
         default_row_values = {
             "Fecha": fecha_hoy,
             "Objeto": objeto_seleccionado,
             "Intentos": intentos,
-            "Kamas Iniciales": kamas_iniciales,
+            "Kamas Iniciales": kamas_iniciales_display,
             "Kamas Finales": kamas_finales,
-            "Inversion": inversion_actual_sesion,
+            "Inversion": inversion_fila,
             "Tiempo Medio por Intento (s)": tiempo_por_intento_actual_sesion or 0.0,
-            "Kamas por Intento": kamas_por_intento_actual_sesion or 0.0,
+            "Kamas por Intento": kamas_por_intento_fila,
             "Resultado": str(exito)
         }
 
@@ -312,105 +327,75 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
             precio_venta_objeto_final = precio_venta_objeto_final if precio_venta_objeto_final is not None else 0
             tipo_exo = tipo_exo if tipo_exo is not None else "N/A"
 
-        # Inicializar acumuladores con la sesión actual
+        # CAMBIO: preparar acumulación desde Old con orden cronológico real
         total_intentos_acumulados = intentos
         total_tiempo_acumulado = (tiempo_por_intento_actual_sesion or 0.0) * intentos
         inversion_acumulada = inversion_actual_sesion
-        kamas_iniciales_acumuladas_para_exo = kamas_iniciales
 
-        print(f"DEBUG_ACUM: Iniciando acumulación desde fallos para '{objeto_seleccionado}'.")
+        # Regla pedida:
+        # - kamas iniciales = primero (más antiguo en Old)
+        # - kamas finales = último (éxito actual)
+        primer_kamas_inicial = None
+        kamas_finales_exito = kamas_finales
 
-        # Recorrer hoja_fallos de abajo hacia arriba y acumular filas que coincidan, luego borrarlas
-        # Protegemos el bucle de acumulación para que un error aquí no impida escribir el registro de éxito
-        try:
-            for fila_num in range(hoja_fallos.max_row, 1, -1):
-                val_obj = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Objeto"]).value
-                val_result = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Resultado"]).value
-                if val_obj == objeto_seleccionado:
-                    # Solo acumular si es un fallo registrado
-                    print(f"DEBUG_ACUM: Encontrada fila fallo {fila_num} para '{objeto_seleccionado}' (Resultado: {val_result})")
-                    # Leer valores de la fila de fallo con tolerancia a tipos
-                    current_fail_attempts_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Intentos"]).value
-                    inversion_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Inversion"]).value
-                    tiempo_medio_intento_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Tiempo Medio por Intento (s)"]).value
-                    kamas_iniciales_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Kamas Iniciales"]).value
+        rows_objeto = []
+        for fila_num in range(2, hoja_fallos.max_row + 1):
+            val_obj = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Objeto"]).value
+            if str(val_obj).strip() == str(objeto_seleccionado).strip():
+                rows_objeto.append(fila_num)
 
-                    # Acumular intentos
-                    if current_fail_attempts_val is not None:
-                        try:
-                            val_intentos = int(current_fail_attempts_val)
-                            total_intentos_acumulados += val_intentos
-                        except (ValueError, TypeError):
-                            pass
+        for fila_num in rows_objeto:
+            current_fail_attempts_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Intentos"]).value
+            inversion_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Inversion"]).value
+            tiempo_medio_intento_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Tiempo Medio por Intento (s)"]).value
+            kamas_iniciales_fail_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Kamas Iniciales"]).value
 
-                    # Acumular inversión
-                    if inversion_fail_val is not None:
-                        try:
-                            val_inversion = float(inversion_fail_val)
-                            inversion_acumulada += val_inversion
-                        except (ValueError, TypeError):
-                            pass
+            fail_attempts = _safe_to_int(current_fail_attempts_val, default=0)
+            total_intentos_acumulados += fail_attempts
 
-                    # Acumular tiempo total usando tiempo medio * intentos de ese fallo
-                    if tiempo_medio_intento_fail_val is not None and current_fail_attempts_val is not None:
-                        try:
-                            val_tiempo_medio = float(tiempo_medio_intento_fail_val)
-                            val_intentos_para_tiempo = int(current_fail_attempts_val)
-                            total_tiempo_acumulado += (val_tiempo_medio * val_intentos_para_tiempo)
-                        except (ValueError, TypeError):
-                            pass
+            # CAMBIO CLAVE: inversión total = SUMA de todas las inversiones de filas
+            inversion_acumulada += _safe_to_float(inversion_fail_val, default=0.0)
 
-                    # Actualizar kamas iniciales acumuladas (mínimo)
-                    if kamas_iniciales_fail_val is not None:
-                        try:
-                            val_kamas_init = int(kamas_iniciales_fail_val)
-                            kamas_iniciales_acumuladas_para_exo = min(kamas_iniciales_acumuladas_para_exo, val_kamas_init)
-                        except (ValueError, TypeError):
-                            pass
+            fail_tmedio = _safe_to_float(tiempo_medio_intento_fail_val, default=0.0)
+            total_tiempo_acumulado += (fail_tmedio * fail_attempts)
 
-                    # Borrar la fila de fallo procesada
-                    hoja_fallos.delete_rows(fila_num)
-                    print(f"DEBUG_LIMPIEZA: Fila {fila_num} eliminada de '{nombre_hoja_fallos}'.")
-        except Exception as e:
-            # Si algo falla en la acumulación, avisamos pero seguimos intentando guardar el éxito
-            print("ERROR_ACUM: Error durante la acumulación de fallos previos:", e)
-            print("Continuando para intentar insertar registro de éxito.")
+            if primer_kamas_inicial is None:
+                primer_kamas_inicial = _safe_to_int(kamas_iniciales_fail_val, default=0)
 
-        # Recalcular promedios finales y defaults
+        if primer_kamas_inicial is None:
+            primer_kamas_inicial = kamas_iniciales
+
+        # borrar filas fusionadas (de abajo a arriba)
+        for fila_num in sorted(rows_objeto, reverse=True):
+            hoja_fallos.delete_rows(fila_num)
+        print(f"DEBUG_FLOW: Eliminadas {len(rows_objeto)} filas fusionadas de '{nombre_hoja_fallos}' para '{objeto_seleccionado}'.")
+
         total_tiempo_por_intento_acumulado = (total_tiempo_acumulado / total_intentos_acumulados) if total_intentos_acumulados > 0 else 0.0
         kamas_por_intento_acumulado = (inversion_acumulada / total_intentos_acumulados) if total_intentos_acumulados > 0 else 0.0
 
-        # Calcular rentabilidad simple si hay tiempo acumulado (kamas netas por hora)
         rentabilidad = None
         if total_tiempo_acumulado > 0:
             horas = total_tiempo_acumulado / 3600.0
-            net_kamas = kamas_finales - kamas_iniciales_acumuladas_para_exo
+            net_kamas = kamas_finales_exito - primer_kamas_inicial
             try:
                 rentabilidad = net_kamas / horas
             except Exception:
                 rentabilidad = None
 
-        # --- NUEVO: Calcular 'Eficiencia' ---
-        # Definición inventada: Eficiencia = rentabilidad / (abs(kamas_por_intento_acumulado) + 1)
-        # Razonamiento: recompensa por hora ajustada por el coste medio por intento.
         eficiencia = None
         try:
             if rentabilidad is not None:
                 eficiencia = float(rentabilidad) / (abs(kamas_por_intento_acumulado) + 1)
-        except Exception as e:
-            print("WARNING: fallo calculando Eficiencia:", e)
+        except Exception:
             eficiencia = None
 
-        print(f"DEBUG_METRICS: rentabilidad={rentabilidad} eficiencia={eficiencia} (kamas_por_intento={kamas_por_intento_acumulado})")
-
-        # Añadir "Resultado" al registro de éxito (por nombre de header)
         row_values_exito = {
             "Fecha": fecha_hoy,
             "Objeto": objeto_seleccionado,
             "Intentos Totales": total_intentos_acumulados,
-            "Kamas Iniciales (acum.)": kamas_iniciales_acumuladas_para_exo,
-            "Kamas Finales": kamas_finales,
-            "Inversion Total": inversion_acumulada,
+            "Kamas Iniciales (acum.)": primer_kamas_inicial,   # primero
+            "Kamas Finales": kamas_finales_exito,              # último
+            "Inversion Total": inversion_acumulada,            # suma de inversiones
             "Tiempo Medio por Intento (s)": total_tiempo_por_intento_acumulado,
             "Kamas por Intento (promedio)": kamas_por_intento_acumulado,
             "Resultado": str(exito),
@@ -810,3 +795,34 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"ERROR durante la migración: {e}")
+
+def _obtener_ultimas_kamas_finales(objeto_nombre, ruta_excel, nombre_hoja):
+    """
+    Busca la última fila guardada para el objeto dado y devuelve sus kamas finales.
+    Retorna 0 si no encuentra nada.
+    """
+    try:
+        if not os.path.exists(ruta_excel):
+            return 0
+
+        libro = openpyxl.load_workbook(ruta_excel, read_only=True)
+        if nombre_hoja not in libro.sheetnames:
+            libro.close()
+            return 0
+
+        hoja = libro[nombre_hoja]
+
+        # Buscar de abajo hacia arriba (más reciente primero)
+        for fila_num in range(hoja.max_row, 1, -1):
+            obj_val = hoja.cell(row=fila_num, column=COLUMNAS_FALLOS["Objeto"]).value
+            if str(obj_val).strip() == str(objeto_nombre).strip():
+                kamas_fin = hoja.cell(row=fila_num, column=COLUMNAS_FALLOS["Kamas Finales"]).value
+                libro.close()
+                return _safe_to_int(kamas_fin, default=0)
+
+        libro.close()
+        return 0
+    except Exception as e:
+        print(f"WARNING: Error buscando últimas kamas finales: {e}")
+        return 0
+
