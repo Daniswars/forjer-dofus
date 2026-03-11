@@ -26,18 +26,24 @@ def extract_number(text):
     """
     Extracts an integer number from a string, removing common non-numeric characters.
     Returns 0 if no number is found.
+    MEJORADO: maneja separadores de miles mixtos (puntos, comas, espacios).
     """
-    # Remove periods, spaces, and commas, then find all digits
-    cleaned_text = text.replace('.', '').replace(' ', '').replace(',', '')
-    print(f"DEBUG_OCR: Cleaned text for number extraction: '{cleaned_text}'")
-    numbers = re.findall(r'\d+', cleaned_text)
-    if numbers:
+    raw = text.strip()
+    print(f"DEBUG_OCR: Raw text recibido: '{raw}'")
+
+    # Eliminar caracteres no numéricos excepto punto y coma (posibles separadores)
+    # Detectar si hay coma decimal (ej: 1.234,56) o punto decimal (ej: 1,234.56)
+    # En Dofus los kamas nunca tienen decimales -> eliminar TODOS los separadores y quedarse con dígitos
+    cleaned = re.sub(r'[^\d]', '', raw)
+    print(f"DEBUG_OCR: Cleaned text (solo dígitos): '{cleaned}'")
+
+    if cleaned:
         try:
-            return int(numbers[0])
+            return int(cleaned)
         except ValueError:
-            print(f"ERROR_OCR: Could not convert '{numbers[0]}' to integer. Returning 0.")
+            print(f"ERROR_OCR: No se pudo convertir '{cleaned}' a int. Devolviendo 0.")
             return 0
-    print(f"DEBUG_OCR: No number found in text: '{text}'. Returning 0.")
+    print(f"DEBUG_OCR: No se encontró número en: '{raw}'. Devolviendo 0.")
     return 0
 
 def wait_for_maguear_text():
@@ -73,40 +79,39 @@ def wait_for_maguear_text():
 def get_kamas():
     """
     Reads the current kamas and rune count from the Dofus interface.
-    Ajustes: acepta totales grandes (hasta UPPER_LIMIT) para no descartar lecturas válidas.
+    MEJORADO: validación por consistencia entre reintentos consecutivos.
     """
     print("\nDEBUG_GET_KAMAS: Starting kamas and rune value retrieval...")
     print(f"DEBUG_GET_KAMAS: Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # Wait for the 'maguear' text to confirm the correct screen state
     if not wait_for_maguear_text():
         print("ERROR_GET_KAMAS: 'maguear' text not found. Aborting kamas retrieval.")
-        return 0 # Return 0 or handle error as appropriate
+        return 0
 
-    time.sleep(1) # Give a moment after ensuring 'maguear' text is present
+    time.sleep(1)
 
-    # Coordinates for Runes and Kamas
     x1_runas, y1_runas = 2785, 1573
     x2_runas, y2_runas = 2909, 1600
-
     x1_kamas, y1_kamas = 2740, 1625
     x2_kamas, y2_kamas = 2932, 1658
 
-    # Create folder for screenshots if it doesn't exist
     carpeta_capturas = r"C:\Users\danis\OneDrive\Desktop\Forjamagia\capturas kamas"
     os.makedirs(carpeta_capturas, exist_ok=True)
 
-    # Nuevo umbral superior: aceptar hasta 100.000.000.000 (100 mil millones)
     UPPER_LIMIT = 100_000_000_000
-    max_retries_ocr = 5
+    # Mínimo razonable: 1000 kamas (evitar lecturas basura como 1, 0, 123...)
+    LOWER_LIMIT = 1_000
+
+    max_retries_ocr = 6
+    historial = []  # guardar lecturas para consistencia
+
     for attempt in range(max_retries_ocr):
         print(f"DEBUG_GET_KAMAS: OCR attempt {attempt + 1}/{max_retries_ocr}...")
 
-        # Mejorar estabilidad: mover ratón antes de captura (ya presente)
         pyautogui.click(2697, 1075)
-        time.sleep(0.2)
+        time.sleep(0.3)
 
-        # Capture and preprocess image for Kamas
+        # Capturar kamas
         capture_kamas_img = pyautogui.screenshot(
             region=(x1_kamas, y1_kamas, x2_kamas - x1_kamas, y2_kamas - y1_kamas))
         processed_kamas_img = preprocess_image(capture_kamas_img)
@@ -114,7 +119,7 @@ def get_kamas():
         ruta_kamas = os.path.join(carpeta_capturas, f"rectangulo_kamas_attempt_{attempt + 1}.png")
         processed_kamas_img.save(ruta_kamas)
 
-        # Capture and preprocess image for Runes
+        # Capturar runas
         capture_runas_img = pyautogui.screenshot(
             region=(x1_runas, y1_runas, x2_runas - x1_runas, y2_runas - y1_runas))
         processed_runas_img = preprocess_image(capture_runas_img)
@@ -122,37 +127,45 @@ def get_kamas():
         ruta_runas = os.path.join(carpeta_capturas, f"rectangulo_runas_attempt_{attempt + 1}.png")
         processed_runas_img.save(ruta_runas)
 
-        print(f"DEBUG_GET_KAMAS: Raw text from Kamas OCR: '{text_kamas}'")
-        print(f"DEBUG_GET_KAMAS: Raw text from Runas OCR: '{text_runas}'")
+        print(f"DEBUG_GET_KAMAS: Texto crudo Kamas: '{text_kamas}'")
+        print(f"DEBUG_GET_KAMAS: Texto crudo Runas: '{text_runas}'")
 
         valor_kamas = extract_number(text_kamas)
         valor_runas = extract_number(text_runas)
         total_kamas = valor_runas + valor_kamas
 
-        print(f"DEBUG_GET_KAMAS: Extracted Runas: {valor_runas}")
-        print(f"DEBUG_GET_KAMAS: Extracted Kamas: {valor_kamas}")
-        print(f"DEBUG_GET_KAMAS: Calculated Total: {total_kamas}")
+        print(f"DEBUG_GET_KAMAS: Runas={valor_runas} | Kamas={valor_kamas} | Total={total_kamas}")
 
-        # NUEVO: Validación adicional - detectar si ambos valores son 0
-        if valor_runas == 0 and valor_kamas == 0:
-            print("WARNING_GET_KAMAS: Ambos valores son 0. Probable fallo de OCR. Reintentando...")
+        # Descartar lecturas basura (ambos 0 o total fuera de rango)
+        if total_kamas < LOWER_LIMIT or total_kamas > UPPER_LIMIT:
+            print(f"WARNING_GET_KAMAS: Total {total_kamas} fuera de rango [{LOWER_LIMIT}, {UPPER_LIMIT}]. Descartando.")
             time.sleep(1)
             continue
 
-        # Sanity check: aceptar totales hasta UPPER_LIMIT
-        if total_kamas > 0 and total_kamas <= UPPER_LIMIT:
-            print(f"DEBUG_GET_KAMAS: Valid total kamas detected: {total_kamas} (<= {UPPER_LIMIT}). Returning.")
-            return total_kamas
+        historial.append(total_kamas)
+        print(f"DEBUG_GET_KAMAS: Historial de lecturas válidas: {historial}")
 
-        # Si es 0 o negativo o supera el límite, reintentar pero informar
-        if total_kamas <= 0:
-            print("DEBUG_GET_KAMAS: Total kamas es 0 o negativo. Reintentando...")
-        else:
-            print(f"WARNING_GET_KAMAS: Total kamas ({total_kamas}) supera el umbral aceptado ({UPPER_LIMIT}). Trataremos como posible OCR erróneo y reintentaremos.")
+        # Aceptar si dos lecturas consecutivas son iguales o muy similares (±1% de diferencia)
+        if len(historial) >= 2:
+            a, b = historial[-2], historial[-1]
+            diff_pct = abs(a - b) / max(a, b) * 100
+            print(f"DEBUG_GET_KAMAS: Diferencia entre últimas 2 lecturas: {diff_pct:.2f}%")
+            if diff_pct <= 1.0:
+                # Usar el valor más bajo de los dos como lectura conservadora
+                resultado = min(a, b)
+                print(f"DEBUG_GET_KAMAS: Lecturas consistentes. Devolviendo: {resultado}")
+                return resultado
 
-        time.sleep(1) # Short delay before next OCR attempt
+        # Si es el último intento y hay al menos una lectura válida, devolver la mediana
+        if attempt == max_retries_ocr - 1 and historial:
+            historial_sorted = sorted(historial)
+            mediana = historial_sorted[len(historial_sorted) // 2]
+            print(f"WARNING_GET_KAMAS: No se obtuvo consistencia. Devolviendo mediana del historial: {mediana}")
+            return mediana
 
-    print("ERROR_GET_KAMAS: Failed to get a valid kamas reading after multiple attempts. Returning 0.")
+        time.sleep(1)
+
+    print("ERROR_GET_KAMAS: No se pudo obtener lectura válida. Devolviendo 0.")
     return 0
 
 # Example usage (for testing this module directly)

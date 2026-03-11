@@ -1685,14 +1685,26 @@
     ]
   },
   "Alianza inestable": {
+    "obj": [
+      "vi",
+      "sa",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_aire",
+      "da_agua",
+      "pla",
+      "es_pa",
+      "da_emp"
+    ],
     "min": [
       186,
       41,
-      4,
-      4,
-      4,
-      4,
-      4,
+      5,
+      5,
+      5,
+      5,
+      5,
       11,
       10,
       33
@@ -1708,18 +1720,6 @@
       15,
       12,
       40
-    ],
-    "obj": [
-      "vi",
-      "sa",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_aire",
-      "da_agua",
-      "pla",
-      "es_pa",
-      "da_emp"
     ]
   },
   "Pikanillo": {
@@ -2054,16 +2054,28 @@
     ]
   },
   "Tuerca de Mecanimut": {
+    "obj": [
+      "vi",
+      "sa",
+      "cri",
+      "inv",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_agua",
+      "prospe",
+      "re_agua_por"
+    ],
     "min": [
       286,
       21,
       6,
       1,
-      8,
-      8,
-      8,
-      8,
-      6,
+      9,
+      9,
+      9,
+      9,
+      4,
       10
     ],
     "max": [
@@ -2077,18 +2089,6 @@
       10,
       10,
       10
-    ],
-    "obj": [
-      "vi",
-      "sa",
-      "cri",
-      "inv",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_agua",
-      "prospe",
-      "re_agua_por"
     ]
   },
   "Anillo de maxilubo": {
