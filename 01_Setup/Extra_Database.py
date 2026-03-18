@@ -109,7 +109,7 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
                   tiempo_medio_intento=None, modo_encadenado_activo=False,
                   precio_objeto_base=None, precio_venta_objeto_final=None, tipo_exo=None):
     """
-    Agrega datos de forjamagia a un archivo Excel.
+    Agrega datos de forjam a a un archivo Excel.
     NUEVO: Acepta kamas_iniciales=None para guardados intermedios (cada 10 intentos).
 
     Args:
@@ -389,15 +389,26 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
         except Exception:
             eficiencia = None
 
+        # CAMBIO: KPI base vs KPI robusto por fallos
+        kamas_por_intento_base = (inversion_acumulada / total_intentos_acumulados) if total_intentos_acumulados > 0 else 0.0
+        kamas_por_intento_fallos_robusto = _kpi_fallos_robusto_para_objeto(hoja_fallos, objeto_seleccionado)
+
+        if kamas_por_intento_fallos_robusto is not None:
+            kamas_por_intento_acumulado = kamas_por_intento_fallos_robusto
+            print(f"DEBUG_KPI: usando media robusta fallos para KPI. base={kamas_por_intento_base:.2f} robusto={kamas_por_intento_acumulado:.2f}")
+        else:
+            kamas_por_intento_acumulado = kamas_por_intento_base
+            print(f"DEBUG_KPI: sin histórico robusto de fallos. usando KPI base={kamas_por_intento_acumulado:.2f}")
+
         row_values_exito = {
             "Fecha": fecha_hoy,
             "Objeto": objeto_seleccionado,
             "Intentos Totales": total_intentos_acumulados,
-            "Kamas Iniciales (acum.)": primer_kamas_inicial,   # primero
-            "Kamas Finales": kamas_finales_exito,              # último
-            "Inversion Total": inversion_acumulada,            # suma de inversiones
+            "Kamas Iniciales (acum.)": primer_kamas_inicial,
+            "Kamas Finales": kamas_finales_exito,
+            "Inversion Total": inversion_acumulada,
             "Tiempo Medio por Intento (s)": total_tiempo_por_intento_acumulado,
-            "Kamas por Intento (promedio)": kamas_por_intento_acumulado,
+            "Kamas por Intento (promedio)": kamas_por_intento_acumulado,  # <- robustecido
             "Resultado": str(exito),
             "Precio Objeto Base": precio_objeto_base if precio_objeto_base is not None else 0,
             "Precio Venta Objeto Final": precio_venta_objeto_final if precio_venta_objeto_final is not None else 0,
@@ -523,7 +534,7 @@ def _find_table_for_headers(sheet, expected_headers):
             continue
         header_cells = [sheet.cell(row=min_row, column=col).value for col in range(min_col, max_col + 1)]
         header_norm = [str(h).strip().lower() if h else "" for h in header_cells]
-        # comprobar que todos los expected headers aparecen en orden (flexible)
+        # comprobar que todos los expected headers aparecen in orden (flexible)
         idx = 0
         ok = True
         for exp in expected_norm:
@@ -826,3 +837,44 @@ def _obtener_ultimas_kamas_finales(objeto_nombre, ruta_excel, nombre_hoja):
         print(f"WARNING: Error buscando últimas kamas finales: {e}")
         return 0
 
+def _compute_trimmed_mean(values, trim_ratio=0.2):
+    """
+    Media recortada simple para reducir impacto de outliers.
+    Si hay pocos valores, cae a media normal.
+    """
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return None
+    vals.sort()
+    n = len(vals)
+    k = int(n * trim_ratio)
+    if n - 2 * k <= 0:
+        return sum(vals) / n
+    core = vals[k:n - k]
+    return (sum(core) / len(core)) if core else (sum(vals) / n)
+
+
+def _kpi_fallos_robusto_para_objeto(hoja_fallos, objeto_seleccionado):
+    """
+    Devuelve media robusta de 'Kamas por Intento' para el objeto leyendo filas de fallos.
+    Fallback: si la columna viene vacía, usa inversion/intentos de la fila.
+    """
+    kpi_vals = []
+    for fila_num in range(2, hoja_fallos.max_row + 1):
+        obj_val = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Objeto"]).value
+        if str(obj_val).strip() != str(objeto_seleccionado).strip():
+            continue
+
+        kpi_cell = hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Kamas por Intento"]).value
+        kpi = _safe_to_float(kpi_cell, default=None)
+        if kpi is None:
+            inv = _safe_to_float(hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Inversion"]).value, default=0.0)
+            it = _safe_to_int(hoja_fallos.cell(row=fila_num, column=COLUMNAS_FALLOS["Intentos"]).value, default=0)
+            kpi = (inv / it) if it > 0 else None
+
+        if kpi is not None:
+            kpi_vals.append(kpi)
+
+    if not kpi_vals:
+        return None
+    return _compute_trimmed_mean(kpi_vals, trim_ratio=0.2)

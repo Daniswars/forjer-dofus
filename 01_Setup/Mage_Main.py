@@ -216,7 +216,7 @@ def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=N
 # ----------------------------------------------------------------------
 # mage_main principal (modificado): intentos y tiempo por intento desde EXO only
 # ----------------------------------------------------------------------
-def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=6):
+def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=9):
     """
     Bucle principal del magueo. RESPONSABILIDAD:
       - No contar 'intentos' por runas; contar intentos únicamente cuando se introduce EXO (Mage_Introduce_Exo).
@@ -352,8 +352,16 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                 if any_under:
                     reads_under_min += 1
                     print(f"DEBUG: lectura previa muestra stats < min. reads_under_min={reads_under_min}. No se puede introducir EXO.")
-                    # no introducir exo porque alguna stat está por debajo del mínimo
                     continue
+
+                # NUEVO: reset diferido justo antes del siguiente intento de EXO
+                try:
+                    import RUN as MainModule
+                    if bool(MainModule.shared_state.get("pending_session_reset", False)):
+                        print("DEBUG: pending_session_reset activo. Se delega reset a RUN en este siguiente intento de EXO.")
+                        return _make_result(False, error="session_reset_pending_exo", extra={"reset_session": True})
+                except Exception:
+                    pass
 
                 # si llegamos aquí -> todas las stats están entre min y max: introducir exo
                 try:

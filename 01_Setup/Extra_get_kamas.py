@@ -132,6 +132,16 @@ def get_kamas():
 
         valor_kamas = extract_number(text_kamas)
         valor_runas = extract_number(text_runas)
+
+        # NUEVO: si runas == 0, click estratégico extra y reintentar sin contar este intento
+        if valor_runas == 0:
+            print(f"WARNING_GET_KAMAS: valor_runas=0 en intento {attempt + 1}. Haciendo click estratégico extra y reintentando...")
+            pyautogui.click(2697, 1075)
+            time.sleep(0.4)
+            pyautogui.click(2697, 1075)
+            time.sleep(0.5)
+            continue
+
         total_kamas = valor_runas + valor_kamas
 
         print(f"DEBUG_GET_KAMAS: Runas={valor_runas} | Kamas={valor_kamas} | Total={total_kamas}")
@@ -170,6 +180,55 @@ def get_kamas():
 
 # Example usage (for testing this module directly)
 if __name__ == "__main__":
-    print("--- Running Extra_get_kamas.py directly for testing ---")
-    current_kamas = get_kamas()
-    print(f"Final Kamas read: {current_kamas}")
+    print("--- Modo test: 100 lecturas de kamas ---")
+
+    TOTAL = 100
+    resultados = []
+    exitos = 0
+    fallos = 0
+    fallos_detalle = []
+
+    for i in range(1, TOTAL + 1):
+        print(f"\n{'='*40}")
+        print(f"  LECTURA {i}/{TOTAL}")
+        print(f"{'='*40}")
+        val = get_kamas()
+        resultados.append(val)
+
+        if val > 0:
+            exitos += 1
+            print(f"  ✓ Lectura {i}: {val:,} kamas")
+        else:
+            fallos += 1
+            fallos_detalle.append(i)
+            print(f"  ✗ Lectura {i}: FALLO (devolvió 0)")
+
+        time.sleep(0.5)  # pequeña pausa entre lecturas para no saturar
+
+    # ========== RESUMEN ==========
+    print(f"\n{'='*50}")
+    print(f"  RESUMEN FINAL - {TOTAL} lecturas")
+    print(f"{'='*50}")
+    print(f"  Éxitos  : {exitos:>4}  ({exitos / TOTAL * 100:.1f}%)")
+    print(f"  Fallos  : {fallos:>4}  ({fallos / TOTAL * 100:.1f}%)")
+
+    if fallos_detalle:
+        print(f"  Lecturas fallidas en intentos: {fallos_detalle}")
+
+    validos = [v for v in resultados if v > 0]
+    if validos:
+        print(f"\n  Valor mínimo  : {min(validos):>15,}")
+        print(f"  Valor máximo  : {max(validos):>15,}")
+        print(f"  Valor medio   : {int(sum(validos)/len(validos)):>15,}")
+        validos_sorted = sorted(validos)
+        mediana = validos_sorted[len(validos_sorted) // 2]
+        print(f"  Mediana       : {mediana:>15,}")
+
+        # Detectar outliers: valores que difieren >20% de la mediana
+        outliers = [v for v in validos if abs(v - mediana) / max(mediana, 1) > 0.20]
+        if outliers:
+            print(f"\n  ⚠ Posibles outliers (>20% desviación de mediana): {outliers}")
+        else:
+            print(f"\n  ✓ Sin outliers detectados (todos dentro del ±20% de la mediana).")
+
+    print(f"{'='*50}\n")

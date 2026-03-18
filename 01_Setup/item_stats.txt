@@ -63,7 +63,7 @@
       "re_emp"
     ]
   },
-  "Anillo corrupcion": {
+  "Anillo de corrupcion": {
     "min": [
       245,
       55,
@@ -134,6 +134,16 @@
     ]
   },
   "Ternura de Belladona": {
+    "obj": [
+      "vi",
+      "sa",
+      "pot",
+      "re_tierra_por",
+      "re_fuego_por",
+      "pla",
+      "es_pa",
+      "re_cri"
+    ],
     "min": [
       336,
       23,
@@ -141,7 +151,6 @@
       5,
       5,
       8,
-      0,
       16,
       8
     ],
@@ -152,20 +161,8 @@
       5,
       5,
       10,
-      10,
       20,
       10
-    ],
-    "obj": [
-      "vi",
-      "sa",
-      "pot",
-      "re_tierra_por",
-      "re_fuego_por",
-      "pla",
-      "hui",
-      "es_pa",
-      "re_cri"
     ]
   },
   "Anillo XLII": {
@@ -279,7 +276,7 @@
       20
     ]
   },
-  "Alianza de corrupción": {
+  "Alianza de corrupcion": {
     "min": [
       286,
       48,
@@ -697,10 +694,23 @@
     ]
   },
   "Alianza quemaalmas": {
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "agi",
+      "sa",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_aire",
+      "re_agua_por",
+      "re_aire_por"
+    ],
     "min": [
       286,
-      55,
-      55,
+      53,
+      53,
       53,
       16,
       6,
@@ -722,19 +732,6 @@
       6,
       7,
       7
-    ],
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "agi",
-      "sa",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_aire",
-      "re_agua_por",
-      "re_aire_por"
     ]
   },
   "Lanza de guerra": {
@@ -1972,15 +1969,28 @@
     ]
   },
   "Anillo de Tentenhuevo": {
+    "obj": [
+      "vi",
+      "fo",
+      "sue",
+      "agi",
+      "da_neu",
+      "da_tierra",
+      "da_agua",
+      "da_aire",
+      "prospe",
+      "re_tierra_por",
+      "da_emp"
+    ],
     "min": [
       236,
       45,
       45,
       45,
-      8,
-      8,
-      8,
-      8,
+      9,
+      9,
+      9,
+      9,
       4,
       8,
       13
@@ -1997,19 +2007,6 @@
       10,
       8,
       15
-    ],
-    "obj": [
-      "vi",
-      "fo",
-      "sue",
-      "agi",
-      "da_neu",
-      "da_tierra",
-      "da_agua",
-      "da_aire",
-      "prospe",
-      "re_tierra_por",
-      "da_emp"
     ]
   },
   "Guante de Psikopomzopato": {
@@ -2261,6 +2258,88 @@
       350,
       10,
       15
+    ]
+  },
+  "Rosca de Mecanimut": {
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "sue",
+      "sa",
+      "cri",
+      "al",
+      "prospe",
+      "re_tierra_por",
+      "re_fuego_por",
+      "ret_pa"
+    ],
+    "min": [
+      336,
+      38,
+      38,
+      38,
+      21,
+      3,
+      1,
+      6,
+      7,
+      7,
+      3
+    ],
+    "max": [
+      350,
+      40,
+      40,
+      40,
+      40,
+      3,
+      1,
+      15,
+      7,
+      7,
+      6
+    ]
+  },
+  "Cesto Helado del Caballero de Hielo": {
+    "obj": [
+      "vi",
+      "sue",
+      "sa",
+      "pot",
+      "al",
+      "da",
+      "da_agua",
+      "prospe",
+      "re_agua_por",
+      "hui",
+      "ret_pm"
+    ],
+    "min": [
+      286,
+      28,
+      21,
+      28,
+      1,
+      4,
+      9,
+      6,
+      10,
+      4,
+      4
+    ],
+    "max": [
+      300,
+      30,
+      30,
+      30,
+      1,
+      4,
+      10,
+      10,
+      10,
+      6,
+      6
     ]
   }
 }

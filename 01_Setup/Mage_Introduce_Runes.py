@@ -129,7 +129,7 @@ def select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runa
     else:
         return COLUMNAS_X[0]
 
-def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planned_clicks=None, max_clicks_per_stat=None):
+def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planned_clicks=None, max_clicks_per_stat=5):
     """
     Versión mejorada: aplicar múltiples clicks por stat en un ciclo si es necesario y beneficioso.
     - Primera pasada: crítica (<30% del mínimo) - 1 click por stat.

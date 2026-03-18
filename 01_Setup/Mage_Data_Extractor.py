@@ -57,8 +57,8 @@ def normalize_number(text):
         return 0
 
     # Caso especial: "%r" -> 9
-    #if '%r' in t_lower or '% r' in t_lower:
-    #    return 9
+    if t_lower == '%r' or t_lower == '% r':
+        return 9
 
     # Caso exacto: equivalentes de "1"
     t_clean = t.replace(' ', '').lower()
