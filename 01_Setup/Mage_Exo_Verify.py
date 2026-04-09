@@ -4,11 +4,24 @@ import pyautogui
 pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract\tesseract.exe'
 import Extra_Correo
 
+# NUEVO: último tipo detectado por OCR (para consumo externo)
+LAST_EXO_TYPE = None
+
+def _detect_exo_type(text: str):
+    t = (text or "").upper()
+    # prioridad de detección
+    if "PA" in t or "AP" in t:
+        return "PA"
+    if "PM" in t:
+        return "PM"
+    return None
+
 def verify_success():
     """
     Checks if the exo was successful by reading the specified screen area.
     Returns True if found keywords ("AP", "PM", "PA", "range", "invocation"), otherwise False.
     """
+    global LAST_EXO_TYPE
     time.sleep(1)
 
     x1, x2 = 1520, 1709
@@ -20,11 +33,16 @@ def verify_success():
     print("Reading for success...")
     print(text_area)
 
-    # Keywords for success
-    if ("AP" in text_area or "PM" in text_area or "PA" in text_area or
-        "range" in text_area or "invocation" in text_area):
+    exo_type = _detect_exo_type(text_area)
+    LAST_EXO_TYPE = exo_type
+
+    if exo_type is not None:
         success = True
-        Extra_Correo.send_mail("Success", 1)
+        # opcional: avisar con tipo detectado
+        try:
+            Extra_Correo.send_mail("Success", f"Exito {exo_type}")
+        except Exception:
+            pass
     else:
         success = False
 
@@ -32,4 +50,4 @@ def verify_success():
 
 if __name__ == "__main__":
     result = verify_success()
-    print(f"Exo success: {result}")
+    print(f"Exo success: {result} | tipo={LAST_EXO_TYPE}")

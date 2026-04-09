@@ -99,13 +99,24 @@
     ]
   },
   "Anillo de allister": {
+    "obj": [
+      "vi",
+      "agi",
+      "sa",
+      "cri",
+      "inv",
+      "da_aire",
+      "prospe",
+      "es_pa",
+      "re_cri"
+    ],
     "min": [
       236,
       66,
       28,
       5,
       1,
-      13,
+      15,
       0,
       4,
       11
@@ -120,17 +131,6 @@
       15,
       6,
       15
-    ],
-    "obj": [
-      "vi",
-      "agi",
-      "sa",
-      "cri",
-      "inv",
-      "da_aire",
-      "prospe",
-      "es_pa",
-      "re_cri"
     ]
   },
   "Ternura de Belladona": {
@@ -600,12 +600,12 @@
       6,
       1,
       1,
-      7,
-      7,
+      6,
+      6,
       8,
       6,
       6,
-      12
+      11
     ],
     "max": [
       100,
@@ -1792,7 +1792,7 @@
       "re_emp"
     ]
   },
-  "Anillo Ceano": {
+  "Anillo Céano": {
     "min": [
       286,
       45,
@@ -2340,6 +2340,131 @@
       10,
       6,
       6
+    ]
+  },
+  "Anillo de los profetas": {
+    "obj": [
+      "vi",
+      "inte",
+      "sue",
+      "sa",
+      "al",
+      "inv",
+      "da_fuego",
+      "da_agua",
+      "prospe",
+      "re_neu",
+      "hui",
+      "ret_pm"
+    ],
+    "min": [
+      186,
+      33,
+      32,
+      26,
+      1,
+      1,
+      9,
+      9,
+      4,
+      6,
+      3,
+      4
+    ],
+    "max": [
+      200,
+      35,
+      35,
+      35,
+      1,
+      1,
+      10,
+      10,
+      10,
+      10,
+      4,
+      4
+    ]
+  },
+  "Anillo de guerrero albuereño": {
+    "obj": [
+      "vi",
+      "fo",
+      "sue"
+    ],
+    "min": [
+      26,
+      45,
+      45
+    ],
+    "max": [
+      30,
+      50,
+      50
+    ]
+  },
+  "Anillo de Mizz Frizz": {
+    "min": [
+      286,
+      45,
+      45,
+      45,
+      3,
+      8,
+      8,
+      4,
+      8,
+      8
+    ],
+    "max": [
+      300,
+      50,
+      50,
+      50,
+      3,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "sue",
+      "cri",
+      "da_neu",
+      "da_tierra",
+      "cu",
+      "re_tierra",
+      "da_cri"
+    ]
+  },
+  "Alianza de los rebeldes": {
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "sa",
+      "da_tierra",
+      "da_fuego"
+    ],
+    "min": [
+      35,
+      23,
+      23,
+      11,
+      5,
+      5
+    ],
+    "max": [
+      40,
+      25,
+      25,
+      15,
+      5,
+      5
     ]
   }
 }

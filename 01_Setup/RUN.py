@@ -2,7 +2,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
-from tkinter import simpledialog  # <-- NUEVO: para diálogos de entrada
+from tkinter import simpledialog
 import customtkinter as ctk
 
 # Importar módulos locales
@@ -447,15 +447,107 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                     print("ERROR al guardar fallo (no_progress):", e)
                     status_var.set("Error al guardar fallo")
 
+            # NUEVO: calcular listado de runas faltantes con Aux_Count_Runes antes del popup
+            missing_runes_msg = 'Falta ""'
+            try:
+                status_var.set("Leyendo runas disponibles...")
+                import Aux_Count_Runes as CountRunes
+                item_obj = []
+                if isinstance(item_stats, dict):
+                    item_obj = item_stats.get("obj", []) or []
+                missing_runes_msg, _, _ = CountRunes.build_missing_runes_for_item_stats(
+                    item_stats_obj=item_obj,
+                    debug_folder=None,
+                    umbral=300
+                )
+                print(f"DEBUG: Aux_Count_Runes -> {missing_runes_msg}")
+            except Exception as e_count:
+                print("WARNING: no se pudo ejecutar Aux_Count_Runes:", e_count)
+                missing_runes_msg = "No se pudo calcular listado de runas faltantes."
+
             # Mostrar ventana emergente y esperar respuesta
-            import threading
-            response = {"val": None}
+            response = {"val": None, "timed_out": False}
             response_event = threading.Event()
+
+            def _format_missing_runes_for_dialog(raw_msg: str) -> str:
+                """
+                Convierte:
+                  Falta "bu vi"(120), "cri"(284), "re_aire_por"(40)
+                a una lista visual:
+                  • bu vi (120)
+                  • cri (284)
+                  • re_aire_por (40)
+                """
+                try:
+                    txt = str(raw_msg or "").strip()
+                    if not txt:
+                        return "• (sin datos)"
+                    if txt.lower().startswith("falta"):
+                        txt = txt[5:].strip()
+
+                    import re
+                    # Captura "label"(num opcional)
+                    pairs = re.findall(r'"([^"]+)"(?:\((\d+)\))?', txt)
+                    if not pairs:
+                        return f"• {str(raw_msg).strip()}"
+
+                    lines = []
+                    for label, qty in pairs:
+                        label = (label or "").strip()
+                        qty = (qty or "").strip()
+                        if qty:
+                            lines.append(f"• {label:<18} ({qty})")
+                        else:
+                            lines.append(f"• {label}")
+                    return "\n".join(lines)
+                except Exception:
+                    return f"• {str(raw_msg).strip()}"
 
             def ask_continue_dialog():
                 try:
-                    ans = messagebox.askyesno("Sin runas", "No quedan runas PA. ¿Continuar (omitir este objeto)?\n\nSi eliges 'No' se detendrá la ejecución.")
-                    response["val"] = bool(ans)
+                    pretty_list = _format_missing_runes_for_dialog(missing_runes_msg)
+                    n_items = sum(1 for ln in pretty_list.splitlines() if ln.strip().startswith("•"))
+
+                    msg = (
+                        "⚠ SIN RUNAS DISPONIBLES\n\n"
+                        f"Runas a comprar ({n_items}):\n"
+                        f"{pretty_list}\n\n"
+                        "¿Continuar y omitir este objeto?\n"
+                        "• Sí  -> continuar con el siguiente\n"
+                        "• No  -> detener ejecución\n\n"
+                        "⏱ Esta ventana se cerrará automáticamente en 5 min."
+                    )
+
+                    # Crear un root temporal de Tk para poder cerrar el modal por timeout
+                    tmp_root = tk.Tk()
+                    tmp_root.withdraw()
+                    tmp_root.attributes("-topmost", True)
+
+                    def _on_timeout():
+                        try:
+                            response["timed_out"] = True
+                            # simular cierre de modal (equivale a cancelar/no continuar)
+                            tmp_root.quit()
+                            tmp_root.destroy()
+                        except Exception:
+                            pass
+
+                    # Programar timeout a 5 min
+                    tmp_root.after(300_000, _on_timeout)
+
+                    # Mostrar diálogo (bloqueante) sobre root temporal
+                    ans = messagebox.askyesno("Sin runas", msg, parent=tmp_root)
+                    # Si llegó aquí por interacción normal (antes del timeout)
+                    if response.get("timed_out"):
+                        response["val"] = False
+                    else:
+                        response["val"] = bool(ans)
+
+                    try:
+                        tmp_root.destroy()
+                    except Exception:
+                        pass
+
                 except Exception:
                     response["val"] = False
                 finally:
@@ -467,6 +559,16 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             except Exception as e:
                 print("Aviso: no se pudo mostrar diálogo de 'Sin runas':", e)
                 response["val"] = False
+
+            if response.get("timed_out"):
+                print("Sin respuesta en 300s en popup 'Sin runas': finalizando programa.")
+                status_var.set("Sin runas: timeout 300s, deteniendo.")
+                try:
+                    import Suspension
+                    Suspension.suspender_pc()
+                except Exception as e_suspend:
+                    print("WARNING: no se pudo suspender el PC tras timeout:", e_suspend)
+                break
 
             user_chose_continue = bool(response.get("val", False))
             if user_chose_continue:
@@ -485,6 +587,23 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             if DataSaver is not None:
                 try:
                     status_var.set("Guardando éxito...")
+
+                    # NUEVO: resolver tipo exo real detectado por OCR
+                    tipo_exo_detectado = None
+                    try:
+                        import Mage_Exo_Verify as ExoVerify
+                        tipo_exo_detectado = getattr(ExoVerify, "LAST_EXO_TYPE", None)
+                    except Exception as e_tipo:
+                        print("WARNING: no se pudo leer LAST_EXO_TYPE:", e_tipo)
+
+                    if not tipo_exo_detectado and isinstance(result, dict):
+                        tipo_exo_detectado = result.get("tipo_exo")
+
+                    if not tipo_exo_detectado:
+                        tipo_exo_detectado = "PA"  # fallback
+
+                    print(f"DEBUG_SAVEFLOW: tipo_exo_detectado={tipo_exo_detectado}")
+
                     saved = DataSaver.finalize_session(
                         objeto=item_name,
                         intentos=attempts_to_save,
@@ -493,7 +612,7 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                         modo_encadenado_activo=True,
                         precio_objeto_base=None,
                         precio_venta_objeto_final=None,
-                        tipo_exo="PA",
+                        tipo_exo=tipo_exo_detectado,
                         kamas_iniciales_arg=None
                     )
                     print(f"DEBUG_SAVEFLOW: guardado éxito saved={saved}")

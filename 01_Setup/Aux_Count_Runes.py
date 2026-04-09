@@ -288,6 +288,7 @@ STAT_TO_RUNE = {
     "es_pm":        ("es_pm", "bu es_pm"),
     "pot":          ("pot", "bu pot"),
     "ini":          ("ini", "bu ini"),
+    "re_emp":       ("re_emp", "bu re_emp"),
 }
 
 def _parse_stats_input(s: str):
@@ -437,22 +438,35 @@ def main(test_obj=None):
     print(f"\n{resultado}")
     print(f"\nFotos guardadas en: {dbg}")
 
+def build_missing_runes_for_item_stats(item_stats_obj, debug_folder=None, umbral=UMBRAL):
+    """
+    API para RUN.py:
+    - item_stats_obj: lista de stats (orden del item)
+    - devuelve: (mensaje_falta, totales, detalle)
+    """
+    selected_stats = [str(x).strip().lower() for x in (item_stats_obj or []) if str(x).strip()]
+    if debug_folder is None:
+        debug_folder = _debug_folder()
+
+    totales, detalle = read_runes(debug_folder=debug_folder)
+    mensaje = _build_missing_string_by_fila(selected_stats, detalle, umbral)
+    return mensaje, totales, detalle
+
 if __name__ == "__main__":
     test_item_stats = {
         "obj": [
             "vi",
             "inte",
+            "sue",
             "sa",
-            "cri",
             "al",
+            "inv",
             "da_fuego",
             "da_agua",
-            "da_aire",
             "prospe",
-            "re_agua_por",
-            "re_aire_por",
-            "pla",
-            "re_emp",
+            "re_neu",
+            "hui",
+            "ret_pm"
         ]
     }
     main(test_obj=test_item_stats["obj"])

@@ -181,6 +181,9 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
     precio_objeto_base = int(precio_objeto_base_safe)
     precio_venta_objeto_final = int(precio_venta_objeto_final_safe)
 
+    # NUEVO: bandera de seguridad para lecturas inválidas/interrumpidas
+    kamas_finales_en_cero = (kamas_finales == 0)
+
     # --- Cargar o crear el archivo y las hojas de Excel ---
     # Intentar abrir el archivo; si está bloqueado por Excel, esperar hasta que se cierre.
     libro_excel = None
@@ -251,9 +254,16 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
 
     # --- Variables comunes para la sesión actual ---
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+
     # Inversión de la fila actual (fallo o éxito del ciclo actual)
-    inversion_actual_sesion = kamas_iniciales - kamas_finales
-    kamas_por_intento_actual_sesion = inversion_actual_sesion / intentos if intentos > 0 else 0
+    if kamas_finales_en_cero:
+        inversion_actual_sesion = 0
+        kamas_por_intento_actual_sesion = 0.0
+        print("DEBUG_GUARD: kamas_finales=0 detectado -> inversion_actual_sesion=0, kamas_por_intento_actual_sesion=0")
+    else:
+        inversion_actual_sesion = kamas_iniciales - kamas_finales
+        kamas_por_intento_actual_sesion = inversion_actual_sesion / intentos if intentos > 0 else 0
+
     tiempo_por_intento_actual_sesion = tiempo_medio_intento if tiempo_medio_intento is not None else 0.0  # Ensure float
 
     print(f"DEBUG_CALC: Inversion de la sesión actual: {inversion_actual_sesion}")
@@ -270,8 +280,13 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
         kamas_iniciales_display = kamas_iniciales_safe if kamas_iniciales_safe > 0 else kamas_finales
 
         # CAMBIO: inversión en fallos siempre basada en la fila (no en acumulado global)
-        inversion_fila = kamas_iniciales_display - kamas_finales
-        kamas_por_intento_fila = inversion_fila / intentos if intentos > 0 else 0.0
+        if kamas_finales_en_cero:
+            inversion_fila = 0
+            kamas_por_intento_fila = 0.0
+            print("DEBUG_GUARD: FAIL con kamas_finales=0 -> inversion_fila=0, kamas_por_intento_fila=0")
+        else:
+            inversion_fila = kamas_iniciales_display - kamas_finales
+            kamas_por_intento_fila = inversion_fila / intentos if intentos > 0 else 0.0
 
         default_row_values = {
             "Fecha": fecha_hoy,
@@ -400,6 +415,12 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
             kamas_por_intento_acumulado = kamas_por_intento_base
             print(f"DEBUG_KPI: sin histórico robusto de fallos. usando KPI base={kamas_por_intento_acumulado:.2f}")
 
+        # NUEVO: regla pedida para éxito con kamas_finales=0
+        if kamas_finales_en_cero:
+            inversion_acumulada = 0.0
+            kamas_por_intento_acumulado = 0.0
+            print("DEBUG_GUARD: SUCCESS con kamas_finales=0 -> Inversion Total=0, Kamas por Intento (promedio)=0")
+
         row_values_exito = {
             "Fecha": fecha_hoy,
             "Objeto": objeto_seleccionado,
@@ -408,7 +429,7 @@ def agregar_datos(objeto_seleccionado, intentos, kamas_iniciales, kamas_finales,
             "Kamas Finales": kamas_finales_exito,
             "Inversion Total": inversion_acumulada,
             "Tiempo Medio por Intento (s)": total_tiempo_por_intento_acumulado,
-            "Kamas por Intento (promedio)": kamas_por_intento_acumulado,  # <- robustecido
+            "Kamas por Intento (promedio)": kamas_por_intento_acumulado,  # <- robustecido / protegido
             "Resultado": str(exito),
             "Precio Objeto Base": precio_objeto_base if precio_objeto_base is not None else 0,
             "Precio Venta Objeto Final": precio_venta_objeto_final if precio_venta_objeto_final is not None else 0,

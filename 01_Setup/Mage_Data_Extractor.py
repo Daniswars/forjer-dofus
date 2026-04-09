@@ -29,7 +29,7 @@ STAT_COORDS = [
 ]
 
 ONE_EQUIVALENTS = [
-    "1", "l", "I", "L", "|", "!", "i", "lalc", "1alc", "talc"
+    "1", "l", "I", "L", "|", "!", "i", "lalc", "1alc", "talc", "lalr"
 ]
 
 def normalize_number(text):
@@ -59,6 +59,9 @@ def normalize_number(text):
     # Caso especial: "%r" -> 9
     if t_lower == '%r' or t_lower == '% r':
         return 9
+
+    if t_lower == '0 plo':
+        return 0
 
     # Caso exacto: equivalentes de "1"
     t_clean = t.replace(' ', '').lower()
