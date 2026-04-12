@@ -553,6 +553,20 @@ def run_process(control_events, status_var, start_btn, stop_btn):
                 finally:
                     response_event.set()
 
+            # --- NUEVO: lanzar suspensión en thread separado justo antes del popup ---
+            susp_cancel_event = threading.Event()
+
+            def _lanzar_suspension_background():
+                try:
+                    import Suspension
+                    Suspension.suspender_pc(300, cancel_event=susp_cancel_event)
+                except Exception as e_suspend:
+                    print("WARNING: no se pudo suspender el PC:", e_suspend)
+
+            # IMPORTANTE: no daemon para evitar que muera justo al salir del flujo
+            suspension_thread = threading.Thread(target=_lanzar_suspension_background, daemon=False)
+            suspension_thread.start()
+
             try:
                 start_btn.after(0, ask_continue_dialog)
                 response_event.wait()
@@ -563,22 +577,47 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             if response.get("timed_out"):
                 print("Sin respuesta en 300s en popup 'Sin runas': finalizando programa.")
                 status_var.set("Sin runas: timeout 300s, deteniendo.")
+
+                # esperar un poco por si la suspensión ya está entrando
                 try:
-                    import Suspension
-                    Suspension.suspender_pc()
+                    if suspension_thread.is_alive():
+                        suspension_thread.join(timeout=3.0)
+                except Exception:
+                    pass
+
+                # fallback: forzar suspensión inmediata si sigue vivo
+                try:
+                    if suspension_thread.is_alive():
+                        import Suspension
+                        Suspension.suspender_pc(0)
                 except Exception as e_suspend:
-                    print("WARNING: no se pudo suspender el PC tras timeout:", e_suspend)
+                    print("WARNING: no se pudo forzar suspensión inmediata:", e_suspend)
+
                 break
 
             user_chose_continue = bool(response.get("val", False))
             if user_chose_continue:
                 print("Usuario eligió continuar tras 'Sin runas'.")
                 status_var.set("Continuando (sin runas).")
+                # cancelar suspensión programada
+                try:
+                    susp_cancel_event.set()
+                    if suspension_thread.is_alive():
+                        suspension_thread.join(timeout=1.0)
+                except Exception:
+                    pass
                 time.sleep(0.3)
                 continue
             else:
                 print("Usuario eligió detener tras 'Sin runas'.")
                 status_var.set("Detenido por usuario.")
+                # detener programada y suspender ya
+                try:
+                    susp_cancel_event.set()
+                    import Suspension
+                    Suspension.suspender_pc(0)
+                except Exception as e_suspend:
+                    print("WARNING: no se pudo suspender inmediatamente:", e_suspend)
                 break
 
         # 5) Si éxito: guardar éxito y continuar automáticamente

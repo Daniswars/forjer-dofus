@@ -58,17 +58,20 @@ def estimate_increment_for(obj, x):
         name = ""
     if x == COLUMNAS_X[0]:
         # columna pequeña
+        if "vi" in name or "vital" in name:
+            return 5
         if "ini" in name:
             return 10
         return 1
     if x == COLUMNAS_X[1]:
         # columna media
+        if "vi" in name or "vital" in name:
+            return 15
         if "ini" in name:
             return 30
         # para resistencia/sustracciones suele ser +3
         if "re" in name or "res" in name or "resistencia" in name:
             return 3
-        # vida en columna media no suele darse, devolvemos 3/10 safe
         return 3
     if x == COLUMNAS_X[2]:
         # columna grande: puede ser +10, +50 (vida) o +100 (ini)
@@ -116,7 +119,15 @@ def select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runa
             return COLUMNAS_X[0]
     elif obj in runas_vi or obj in runas_ini or obj in runas_basic_stats:
         if obj in runas_vi:
-            return COLUMNAS_X[2] if actual + 50 <= maximo else COLUMNAS_X[1]
+            # Regla solicitada: si stat_max de vida < 50, usar runa pequeña [0]
+            if maximo < 50:
+                return COLUMNAS_X[0]
+            if actual + 50 <= maximo:
+                return COLUMNAS_X[2]
+            elif actual + 15 <= maximo:
+                return COLUMNAS_X[1]
+            else:
+                return COLUMNAS_X[0]
         elif obj in runas_ini:
             if actual + 100 <= maximo:
                 return COLUMNAS_X[2]

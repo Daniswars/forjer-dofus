@@ -51,10 +51,6 @@
     "kamas_iniciales": 1654942154,
     "timestamp": "2026-03-04T22:12:05.705107"
   },
-  "Anillo de grithril": {
-    "kamas_iniciales": 1655756455,
-    "timestamp": "2026-03-05T17:26:43.759129"
-  },
   "Anillo Colette": {
     "kamas_iniciales": 26190075,
     "timestamp": "2026-03-07T21:40:49.977172"
@@ -91,32 +87,36 @@
     "kamas_iniciales": 62867685,
     "timestamp": "2026-03-17T22:08:07.667063"
   },
-  "Anillo Kturno": {
-    "kamas_iniciales": 71541157,
-    "timestamp": "2026-03-30T11:07:50.376422"
-  },
   "z": {
     "kamas_iniciales": 51553306,
     "timestamp": "2026-03-18T19:45:17.009934"
   },
   "Anillo de querrero albuerefio": {
-    "kamas_iniciales": 58354265,
-    "timestamp": "2026-03-31T18:22:38.782869"
+    "kamas_iniciales": 33974530,
+    "timestamp": "2026-04-12T10:24:32.294315"
   },
   "Alianza de los rebeldes": {
-    "kamas_iniciales": 58354265,
-    "timestamp": "2026-03-31T18:23:01.850372"
+    "kamas_iniciales": 55620597,
+    "timestamp": "2026-04-09T15:42:48.451909"
   },
   "Alianza inestable": {
     "kamas_iniciales": 32848466,
     "timestamp": "2026-04-08T19:25:52.865691"
   },
-  "Soberano sello de rey stropajo": {
-    "kamas_iniciales": 75186356,
-    "timestamp": "2026-04-09T08:30:40.698448"
+  "Lavanillo": {
+    "kamas_iniciales": 275023882,
+    "timestamp": "2026-04-10T19:21:29.708499"
   },
   "Anillo de Noai Aludem": {
-    "kamas_iniciales": 85442286,
-    "timestamp": "2026-04-08T23:35:22.300193"
+    "kamas_iniciales": 264851663,
+    "timestamp": "2026-04-10T20:21:46.381385"
+  },
+  "Anillo de kukoloide": {
+    "kamas_iniciales": 47980507,
+    "timestamp": "2026-04-11T21:39:42.244744"
+  },
+  "Anillo de Maxilubo": {
+    "kamas_iniciales": 246046912,
+    "timestamp": "2026-04-10T23:20:37.631235"
   }
 }
