@@ -1,3 +1,5 @@
 /capturas_celdas/
 .idea
 Obsoleto
+# Ignora cualquier carpeta llamada __pycache__ en cualquier nivel
+**/__pycache__/
