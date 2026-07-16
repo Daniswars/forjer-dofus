@@ -1,7 +1,7 @@
 import os
 import time
 
-def suspender_pc(segundos=300, cancel_event=None):
+def suspender_pc(segundos=7200, cancel_event=None):
     print(f"Tarea finalizada. El equipo se suspenderá en {segundos} segundos...")
 
     for restante in range(segundos, 0, -1):

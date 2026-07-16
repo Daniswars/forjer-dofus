@@ -63,7 +63,7 @@
       "re_emp"
     ]
   },
-  "Anillo de corrupcion": {
+  "Anillo corrupcion": {
     "min": [
       245,
       55,
@@ -99,24 +99,13 @@
     ]
   },
   "Anillo de allister": {
-    "obj": [
-      "vi",
-      "agi",
-      "sa",
-      "cri",
-      "inv",
-      "da_aire",
-      "prospe",
-      "es_pa",
-      "re_cri"
-    ],
     "min": [
       236,
       66,
       28,
       5,
       1,
-      15,
+      13,
       0,
       4,
       11
@@ -131,19 +120,20 @@
       15,
       6,
       15
+    ],
+    "obj": [
+      "vi",
+      "agi",
+      "sa",
+      "cri",
+      "inv",
+      "da_aire",
+      "prospe",
+      "es_pa",
+      "re_cri"
     ]
   },
   "Ternura de Belladona": {
-    "obj": [
-      "vi",
-      "sa",
-      "pot",
-      "re_tierra_por",
-      "re_fuego_por",
-      "pla",
-      "es_pa",
-      "re_cri"
-    ],
     "min": [
       336,
       23,
@@ -151,6 +141,7 @@
       5,
       5,
       8,
+      0,
       16,
       8
     ],
@@ -161,8 +152,20 @@
       5,
       5,
       10,
+      10,
       20,
       10
+    ],
+    "obj": [
+      "vi",
+      "sa",
+      "pot",
+      "re_tierra_por",
+      "re_fuego_por",
+      "pla",
+      "hui",
+      "es_pa",
+      "re_cri"
     ]
   },
   "Anillo XLII": {
@@ -204,16 +207,6 @@
     ]
   },
   "Amargura de Belladona": {
-    "obj": [
-      "vi",
-      "sa",
-      "pot",
-      "re_agua_por",
-      "re_aire_por",
-      "hui",
-      "ret_pa",
-      "re_cri"
-    ],
     "min": [
       236,
       40,
@@ -221,6 +214,7 @@
       5,
       5,
       7,
+      0,
       17,
       6
     ],
@@ -231,30 +225,29 @@
       5,
       5,
       10,
+      10,
       20,
       10
+    ],
+    "obj": [
+      "vi",
+      "sa",
+      "pot",
+      "re_agua_por",
+      "re_aire_por",
+      "hui",
+      "pla",
+      "ret_pa",
+      "re_cri"
     ]
   },
   "Anillo Colette": {
-    "obj": [
-      "vi",
-      "agi",
-      "sa",
-      "al",
-      "da",
-      "prospe",
-      "re_agua_por",
-      "re_neu",
-      "re_tierra",
-      "re_agua",
-      "da_tram"
-    ],
     "min": [
       136,
       45,
       25,
       1,
-      5,
+      1,
       0,
       10,
       6,
@@ -267,16 +260,29 @@
       50,
       40,
       1,
-      7,
+      5,
       20,
       10,
       10,
       10,
       6,
       20
+    ],
+    "obj": [
+      "vi",
+      "agi",
+      "sa",
+      "al",
+      "da",
+      "prospe",
+      "re_agua_por",
+      "re_neu",
+      "re_tierra",
+      "re_agua",
+      "da_tram"
     ]
   },
-  "Alianza de corrupcion": {
+  "Alianza de corrupción": {
     "min": [
       286,
       48,
@@ -388,17 +394,8 @@
     ]
   },
   "Alianza Natomia": {
-    "obj": [
-      "vi",
-      "inte",
-      "sa",
-      "al",
-      "da_fuego",
-      "pla",
-      "ret_pm"
-    ],
     "min": [
-      337,
+      336,
       66,
       21,
       1,
@@ -414,6 +411,15 @@
       15,
       15,
       8
+    ],
+    "obj": [
+      "vi",
+      "inte",
+      "sa",
+      "al",
+      "da_fuego",
+      "pla",
+      "ret_pm"
     ]
   },
   "Anillo de brus": {
@@ -577,6 +583,36 @@
     ]
   },
   "Anillo de noai aludem": {
+    "min": [
+      86,
+      55,
+      55,
+      21,
+      6,
+      1,
+      1,
+      6,
+      6,
+      8,
+      6,
+      6,
+      11
+    ],
+    "max": [
+      100,
+      60,
+      60,
+      30,
+      6,
+      1,
+      1,
+      7,
+      7,
+      8,
+      10,
+      10,
+      12
+    ],
     "obj": [
       "vi",
       "inte",
@@ -591,51 +627,9 @@
       "re_tierra",
       "re_aire",
       "da_cri"
-    ],
-    "min": [
-      86,
-      54,
-      54,
-      21,
-      6,
-      1,
-      1,
-      7,
-      7,
-      8,
-      6,
-      6,
-      12
-    ],
-    "max": [
-      100,
-      60,
-      60,
-      40,
-      6,
-      1,
-      1,
-      7,
-      7,
-      8,
-      10,
-      10,
-      12
     ]
   },
   "Crueldad de Belladona": {
-    "obj": [
-      "vi",
-      "sa",
-      "pot",
-      "da_tierra",
-      "da_fuego",
-      "da_agua",
-      "da_aire",
-      "ini",
-      "re_neu_por",
-      "re_cri"
-    ],
     "min": [
       286,
       21,
@@ -646,6 +640,8 @@
       9,
       450,
       10,
+      0,
+      0,
       8
     ],
     "max": [
@@ -658,7 +654,23 @@
       10,
       500,
       10,
+      0,
+      0,
       10
+    ],
+    "obj": [
+      "vi",
+      "sa",
+      "pot",
+      "da_tierra",
+      "da_fuego",
+      "da_agua",
+      "da_aire",
+      "ini",
+      "re_neu_por",
+      "pla",
+      "hui",
+      "re_cri"
     ]
   },
   "Brazalete de melenutrof": {
@@ -694,23 +706,10 @@
     ]
   },
   "Alianza quemaalmas": {
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "agi",
-      "sa",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_aire",
-      "re_agua_por",
-      "re_aire_por"
-    ],
     "min": [
       286,
-      53,
-      53,
+      55,
+      55,
       53,
       16,
       6,
@@ -732,6 +731,19 @@
       6,
       7,
       7
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "agi",
+      "sa",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_aire",
+      "re_agua_por",
+      "re_aire_por"
     ]
   },
   "Lanza de guerra": {
@@ -741,7 +753,6 @@
       14,
       3,
       8,
-      0,
       7,
       7,
       13
@@ -752,7 +763,6 @@
       30,
       3,
       8,
-      0,
       7,
       7,
       13
@@ -770,25 +780,15 @@
     ]
   },
   "Anillo de styx": {
-    "obj": [
-      "vi",
-      "sue",
-      "sa",
-      "cri",
-      "da_agua",
-      "ini",
-      "re_agua_por",
-      "re_agua"
-    ],
     "min": [
       186,
-      54,
+      58,
       30,
       3,
-      8,
+      9,
       280,
       10,
-      8
+      3
     ],
     "max": [
       200,
@@ -799,6 +799,16 @@
       350,
       10,
       15
+    ],
+    "obj": [
+      "vi",
+      "sue",
+      "sa",
+      "cri",
+      "da_agua",
+      "ini",
+      "re_agua_por",
+      "re_agua"
     ]
   },
   "Alianza golosona": {
@@ -971,15 +981,6 @@
     ]
   },
   "Anillo del conde kontatras": {
-    "obj": [
-      "vi",
-      "fo",
-      "sa",
-      "cri",
-      "da_neu",
-      "da_tierra",
-      "re_cri"
-    ],
     "min": [
       336,
       45,
@@ -987,7 +988,8 @@
       7,
       13,
       13,
-      17
+      17,
+      0
     ],
     "max": [
       350,
@@ -996,7 +998,18 @@
       7,
       13,
       13,
-      25
+      25,
+      0
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "sa",
+      "cri",
+      "da_neu",
+      "da_tierra",
+      "re_cri",
+      "ini"
     ]
   },
   "Anillo de lario": {
@@ -1462,7 +1475,7 @@
       "es_pm"
     ]
   },
-  "Anillo cruastico": {
+  "Anillo crustico": {
     "min": [
       336,
       71,
@@ -1501,9 +1514,9 @@
     "min": [
       236,
       21,
-      44,
+      41,
       1,
-      15,
+      13,
       6,
       101,
       8
@@ -1682,26 +1695,14 @@
     ]
   },
   "Alianza inestable": {
-    "obj": [
-      "vi",
-      "sa",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_aire",
-      "da_agua",
-      "pla",
-      "es_pa",
-      "da_emp"
-    ],
     "min": [
       186,
       41,
-      5,
-      5,
-      5,
-      5,
-      5,
+      4,
+      4,
+      4,
+      4,
+      4,
       11,
       10,
       33
@@ -1717,6 +1718,18 @@
       15,
       12,
       40
+    ],
+    "obj": [
+      "vi",
+      "sa",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_aire",
+      "da_agua",
+      "pla",
+      "es_pa",
+      "da_emp"
     ]
   },
   "Pikanillo": {
@@ -1792,7 +1805,7 @@
       "re_emp"
     ]
   },
-  "Anillo Céano": {
+  "Anillo Ceano": {
     "min": [
       286,
       45,
@@ -1969,28 +1982,15 @@
     ]
   },
   "Anillo de Tentenhuevo": {
-    "obj": [
-      "vi",
-      "fo",
-      "sue",
-      "agi",
-      "da_neu",
-      "da_tierra",
-      "da_agua",
-      "da_aire",
-      "prospe",
-      "re_tierra_por",
-      "da_emp"
-    ],
     "min": [
       236,
       45,
       45,
       45,
-      9,
-      9,
-      9,
-      9,
+      8,
+      8,
+      8,
+      8,
       4,
       8,
       13
@@ -2007,6 +2007,19 @@
       10,
       8,
       15
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "sue",
+      "agi",
+      "da_neu",
+      "da_tierra",
+      "da_agua",
+      "da_aire",
+      "prospe",
+      "re_tierra_por",
+      "da_emp"
     ]
   },
   "Guante de Psikopomzopato": {
@@ -2051,28 +2064,16 @@
     ]
   },
   "Tuerca de Mecanimut": {
-    "obj": [
-      "vi",
-      "sa",
-      "cri",
-      "inv",
-      "da_neu",
-      "da_tierra",
-      "da_fuego",
-      "da_agua",
-      "prospe",
-      "re_agua_por"
-    ],
     "min": [
       286,
       21,
       6,
       1,
-      9,
-      9,
-      9,
-      9,
-      4,
+      8,
+      8,
+      8,
+      8,
+      6,
       10
     ],
     "max": [
@@ -2086,6 +2087,59 @@
       10,
       10,
       10
+    ],
+    "obj": [
+      "vi",
+      "sa",
+      "cri",
+      "inv",
+      "da_neu",
+      "da_tierra",
+      "da_fuego",
+      "da_agua",
+      "prospe",
+      "re_agua_por"
+    ]
+  },
+  "Rosca de Mecanimut": {
+    "min": [
+      336,
+      38,
+      38,
+      38,
+      21,
+      3,
+      1,
+      6,
+      7,
+      7,
+      4
+    ],
+    "max": [
+      350,
+      40,
+      40,
+      40,
+      40,
+      3,
+      1,
+      15,
+      7,
+      7,
+      6
+    ],
+    "obj": [
+      "vi",
+      "fo",
+      "inte",
+      "sue",
+      "sa",
+      "cri",
+      "al",
+      "prospe",
+      "re_tierra_por",
+      "re_fuego_por",
+      "ret_pa"
     ]
   },
   "Anillo de maxilubo": {
@@ -2105,7 +2159,7 @@
       40,
       30,
       1,
-      5,
+      4,
       15,
       200,
       7,
@@ -2161,147 +2215,33 @@
       "re_emp"
     ]
   },
-  "Guante de la Rata Blanca": {
-    "obj": [
-      "vi",
-      "inte",
-      "sue",
-      "sa",
-      "al",
-      "da_fuego",
-      "da_agua",
-      "cu",
-      "hui"
-    ],
+  "Cesto helado del Caballero de": {
     "min": [
-      86,
+      286,
       28,
+      21,
       28,
-      11,
       1,
-      5,
-      5,
-      3,
-      3
-    ],
-    "max": [
-      100,
-      30,
-      30,
-      15,
-      1,
-      5,
-      5,
-      5,
-      5
-    ]
-  },
-  "Anillo de Infernus": {
-    "obj": [
-      "vi",
-      "inte",
-      "sa",
-      "cri",
-      "da_fuego",
-      "ini",
-      "re_fuego_por",
-      "re_fuego"
-    ],
-    "min": [
-      186,
-      55,
-      21,
-      3,
-      8,
-      250,
-      10,
-      11
-    ],
-    "max": [
-      200,
-      60,
-      40,
-      3,
-      10,
-      300,
-      10,
-      15
-    ]
-  },
-  "Anillo de Mandrin": {
-    "obj": [
-      "vi",
-      "fo",
-      "sa",
-      "cri",
-      "da_tierra",
-      "ini",
-      "re_agua_por",
-      "re_tierra"
-    ],
-    "min": [
-      186,
-      55,
-      21,
-      3,
-      8,
-      250,
-      10,
-      11
-    ],
-    "max": [
-      200,
-      60,
-      40,
-      3,
-      10,
-      350,
-      10,
-      15
-    ]
-  },
-  "Rosca de Mecanimut": {
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "sue",
-      "sa",
-      "cri",
-      "al",
-      "prospe",
-      "re_tierra_por",
-      "re_fuego_por",
-      "ret_pa"
-    ],
-    "min": [
-      336,
-      38,
-      38,
-      38,
-      21,
-      3,
-      1,
+      4,
+      9,
       6,
-      7,
-      7,
-      3
+      10,
+      4,
+      4
     ],
     "max": [
-      350,
-      40,
-      40,
-      40,
-      40,
-      3,
+      300,
+      30,
+      30,
+      30,
       1,
-      15,
-      7,
-      7,
+      5,
+      10,
+      10,
+      10,
+      6,
       6
-    ]
-  },
-  "Cesto Helado del Caballero de Hielo": {
+    ],
     "obj": [
       "vi",
       "sue",
@@ -2314,233 +2254,50 @@
       "re_agua_por",
       "hui",
       "ret_pm"
-    ],
+    ]
+  },
+  "Anillo de luchador de presinkac!": {
     "min": [
-      286,
-      28,
+      336,
+      45,
+      45,
+      45,
       21,
-      28,
-      1,
-      4,
-      9,
+      3,
+      8,
+      8,
+      8,
+      8,
       6,
-      10,
-      4,
-      4
+      301
     ],
     "max": [
-      300,
-      30,
-      30,
-      30,
-      1,
-      5,
+      350,
+      50,
+      50,
+      50,
+      40,
+      3,
       10,
       10,
       10,
-      6,
-      6
-    ]
-  },
-  "Anillo de los profetas": {
+      10,
+      15,
+      400
+    ],
     "obj": [
       "vi",
+      "fo",
       "inte",
-      "sue",
+      "agi",
       "sa",
-      "al",
-      "inv",
-      "da_fuego",
-      "da_agua",
-      "prospe",
-      "re_neu",
-      "hui",
-      "ret_pm"
-    ],
-    "min": [
-      186,
-      33,
-      32,
-      26,
-      1,
-      1,
-      9,
-      9,
-      4,
-      6,
-      3,
-      4
-    ],
-    "max": [
-      200,
-      35,
-      35,
-      35,
-      1,
-      1,
-      10,
-      10,
-      10,
-      10,
-      4,
-      4
-    ]
-  },
-  "Anillo de querrero albuerefio": {
-    "obj": [
-      "vi",
-      "fo",
-      "sue"
-    ],
-    "min": [
-      26,
-      48,
-      45
-    ],
-    "max": [
-      30,
-      50,
-      50
-    ]
-  },
-  "Anillo de Mizz Frizz": {
-    "min": [
-      286,
-      45,
-      45,
-      45,
-      3,
-      8,
-      8,
-      4,
-      8,
-      8
-    ],
-    "max": [
-      300,
-      50,
-      50,
-      50,
-      3,
-      10,
-      10,
-      10,
-      10,
-      10
-    ],
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "sue",
       "cri",
       "da_neu",
       "da_tierra",
-      "cu",
-      "re_tierra",
-      "da_cri"
-    ]
-  },
-  "Alianza de los rebeldes": {
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "sa",
-      "da_tierra",
-      "da_fuego"
-    ],
-    "min": [
-      35,
-      23,
-      23,
-      11,
-      5,
-      5
-    ],
-    "max": [
-      40,
-      25,
-      25,
-      15,
-      5,
-      5
-    ]
-  },
-  "Anillo Kturno": {
-    "min": [
-      186,
-      61,
-      61,
-      16,
-      2,
-      11,
-      11,
-      6,
-      7,
-      3
-    ],
-    "max": [
-      200,
-      70,
-      70,
-      30,
-      2,
-      12,
-      12,
-      15,
-      7,
-      5
-    ],
-    "obj": [
-      "vi",
-      "inte",
-      "sue",
-      "sa",
-      "cri",
       "da_fuego",
-      "da_agua",
+      "da_aire",
       "prospe",
-      "re_aire_por",
-      "pla"
-    ]
-  },
-  "Anillo de Roble Blando": {
-    "min": [
-      136,
-      28,
-      28,
-      16,
-      2,
-      5,
-      6,
-      6,
-      6,
-      6
-    ],
-    "max": [
-      150,
-      30,
-      30,
-      25,
-      2,
-      5,
-      10,
-      6,
-      6,
-      6
-    ],
-    "obj": [
-      "vi",
-      "fo",
-      "inte",
-      "sa",
-      "cri",
-      "da",
-      "prospe",
-      "re_neu_por",
-      "re_tierra_por",
-      "re_fuego_por"
+      "ini"
     ]
   }
 }

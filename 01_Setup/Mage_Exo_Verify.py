@@ -38,11 +38,6 @@ def verify_success():
 
     if exo_type is not None:
         success = True
-        # opcional: avisar con tipo detectado
-        try:
-            Extra_Correo.send_mail("Success", f"Exito {exo_type}")
-        except Exception:
-            pass
     else:
         success = False
 

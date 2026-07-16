@@ -216,7 +216,7 @@ def apply_runes_optimized(stats_actuales, stats_min, stats_obj=None, stats_max=N
 # ----------------------------------------------------------------------
 # mage_main principal (modificado): intentos y tiempo por intento desde EXO only
 # ----------------------------------------------------------------------
-def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=9):
+def mage_main(item_name, item_stats, control_events=None, max_iterations=None, no_progress_limit=8):
     """
     Bucle principal del magueo. RESPONSABILIDAD:
       - No contar 'intentos' por runas; contar intentos únicamente cuando se introduce EXO (Mage_Introduce_Exo).
@@ -373,7 +373,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                     except Exception:
                         pass
                     # Si lleva más de 30 minutos magueando, intentar resetear sesión y retornar indicando reset
-                    if elapsed >= 30 * 60:
+                    if elapsed >= 999999999 * 60:
                         reset_done = False
                         try:
                             print("DEBUG: Tiempo >= 30min. Intentando resetear sesión desde Mage_Main tras introducir EXO...")
@@ -452,7 +452,7 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
 
             applied = apply_runes_optimized(stats_actuales, item_stats["min"], item_stats.get("obj", []), item_stats.get("max", []), control_events=control_events, pre_clicks=3)
             if applied is False:
-                print("No se aplicaron runas en esta iteración.")
+                print("No se aplicaron runas in esta iteración.")
                 time.sleep(0.04)
                 ensure_ui_active()
                 continue
@@ -469,9 +469,41 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
             if prev_stats is not None and stats_nuevos == prev_stats:
                 no_progress_count += 1
                 print(f"No progress ({no_progress_count}/{no_progress_limit})")
+                
+                # Comprobar específicamente en el intento 4 de los 8
+                if no_progress_count == 4:
+                    found_impossible = False
+                    if AuxForja is not None:
+                        try:
+                            found_impossible, dbg_texts = AuxForja.forjamagia_impossible_at_points(
+                                points=[(1788, 1050), (2048, 1087)],
+                                region_size=(600, 120),
+                                lang='spa',
+                                debug_save_folder=None,
+                                save_prefix=None
+                            )
+                        except Exception as e:
+                            print("WARNING: fallo al ejecutar AuxForja en la 4ta comprobación:", e)
+                            found_impossible = False
+
+                    if found_impossible:
+                        print("DEBUG: 'Forjamagia imposible' detectado al 4º intento -> Ejecutando restart routine.")
+                        try:
+                            import ForjamagiaImposibleRestartRoutine as RestartRoutine
+                            RestartRoutine.run_routine()
+                        except Exception as e:
+                            print("WARNING: no se pudo ejecutar ForjamagiaImposibleRestartRoutine:", e)
+                        
+                        # Resetear contador y continuar con la ejecución normal
+                        no_progress_count = 0
+                        prev_stats = None
+                        time.sleep(0.06)
+                        ensure_ui_active()
+                        continue
+
                 if no_progress_count >= no_progress_limit:
                     try:
-                        # Nueva lógica: comprobar si aparece "Forjamagia imposible"
+                        # Comprobar si aparece "Forjamagia imposible"
                         found_impossible = False
                         if AuxForja is not None:
                             try:
@@ -501,10 +533,10 @@ def mage_main(item_name, item_stats, control_events=None, max_iterations=None, n
                             time.sleep(0.06)
                             continue
 
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print("WARNING: error en lógica de control de 8 ciclos sin progreso:", e)
 
-                    # Si no se detectó "Forjamagia imposible" o Aux no disponible -> comportamiento original
+                    # Si falló 8 veces sin "Forjamagia imposible" -> lanzar sin runas directo
                     try:
                         Correo.send_mail(item_name, "Sin runas")
                     except Exception:

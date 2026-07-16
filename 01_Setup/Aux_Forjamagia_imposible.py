@@ -89,7 +89,12 @@ def forjamagia_impossible_at_points(points=None, region_size=(600, 120), lang='s
         texts.append(norm)
         # comprobar sin espacios para evitar discrepancias por separación
         norm_nospace = _strip_spaces(norm)
-        if "forjamagiaimposible" in norm_nospace:
+        if (
+            "forjamagiaimposible" in norm_nospace or 
+            "dnoesta" in norm_nospace or 
+            "disponible" in norm_nospace or 
+            "cantidad" in norm_nospace
+        ):
             found = True
             # podemos devolver pronto, pero seguimos capturando si queremos debug de todas
             # break
@@ -97,6 +102,7 @@ def forjamagia_impossible_at_points(points=None, region_size=(600, 120), lang='s
     return found, texts
 
 if __name__ == "__main__":
+    time.sleep(2)
     print("Comprobando 'Forjamagia imposible' en puntos configurados...")
     start = time.time()
     ok, debug_texts = forjamagia_impossible_at_points(

@@ -223,11 +223,6 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
             if not obj or actual >= minimo:
                 continue
 
-            # NUEVA REGLA: vida solo 1 click máximo, no múltiples
-            if obj in runas_vi and i in clicked_indices:
-                print(f"[PASADA {pass_count}] saltando stat {obj} (vida): ya recibió 1 click en fase crítica")
-                continue
-
             x = select_column_for_stat(obj, actual, maximo, runas_tochas, runas_re_por, runas_da_20, runas_cu, runas_esquivas_retiras, runas_pla_hui, runas_re, runas_potencia, runa_prospe, runas_re_emp, runas_da, runas_sa, runas_vi, runas_ini, runas_basic_stats)
             inc = estimate_increment_for(obj, x)
 
@@ -242,7 +237,6 @@ def mage_introduce_runes(stats_actuales, stats_min, stats_obj, stats_max, planne
                 did_click_any = True
                 any_clicked_this_pass = True
                 stats_actuales[i] = min(stats_actuales[i] + inc, maximo)
-                # Si es vida, pausa más larga
                 if obj in runas_vi:
                     time.sleep(0.08)
             except Exception as e:

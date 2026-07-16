@@ -12,8 +12,8 @@
     "timestamp": "2026-02-14T09:35:37.735826"
   },
   "a": {
-    "kamas_iniciales": 1920033570,
-    "timestamp": "2026-02-14T11:02:15.572294"
+    "kamas_iniciales": 0,
+    "timestamp": "2026-07-14T08:42:14.523854"
   },
   "Anillo del Conde Kontatras": {
     "kamas_iniciales": 1920029826,
@@ -36,8 +36,8 @@
     "timestamp": "2026-02-17T10:48:33.067918"
   },
   "Runa Ga PA": {
-    "kamas_iniciales": 1775824610,
-    "timestamp": "2026-02-20T19:54:37.290634"
+    "kamas_iniciales": 176269952,
+    "timestamp": "2026-06-27T09:19:27.455638"
   },
   "Sello del rey jugador": {
     "kamas_iniciales": 1714236751,
@@ -45,7 +45,7 @@
   },
   "re": {
     "kamas_iniciales": 0,
-    "timestamp": "2026-03-02T17:46:49.273722"
+    "timestamp": "2026-07-02T09:06:50.993829"
   },
   "Crueldad de Belladona": {
     "kamas_iniciales": 1654942154,
@@ -88,35 +88,67 @@
     "timestamp": "2026-03-17T22:08:07.667063"
   },
   "z": {
-    "kamas_iniciales": 51553306,
-    "timestamp": "2026-03-18T19:45:17.009934"
-  },
-  "Anillo de querrero albuerefio": {
-    "kamas_iniciales": 33974530,
-    "timestamp": "2026-04-12T10:24:32.294315"
-  },
-  "Alianza de los rebeldes": {
-    "kamas_iniciales": 55620597,
-    "timestamp": "2026-04-09T15:42:48.451909"
+    "kamas_iniciales": 237570841,
+    "timestamp": "2026-07-07T18:35:41.060111"
   },
   "Alianza inestable": {
     "kamas_iniciales": 32848466,
     "timestamp": "2026-04-08T19:25:52.865691"
   },
   "Lavanillo": {
-    "kamas_iniciales": 275023882,
-    "timestamp": "2026-04-10T19:21:29.708499"
+    "kamas_iniciales": 832084924,
+    "timestamp": "2026-05-31T21:04:08.827690"
+  },
+  "Amuleto de querrero albuerefio": {
+    "kamas_iniciales": 134306943,
+    "timestamp": "2026-05-22T16:46:31.603411"
+  },
+  "Anillo de XLII": {
+    "kamas_iniciales": 139820389,
+    "timestamp": "2026-06-14T12:00:19.354555"
+  },
+  "Alianza Stral": {
+    "kamas_iniciales": 146953678,
+    "timestamp": "2026-06-18T20:41:52.169224"
+  },
+  "Alianza Fiedad": {
+    "kamas_iniciales": 128540831,
+    "timestamp": "2026-05-22T17:26:38.761843"
+  },
+  "Anillo cruastico": {
+    "kamas_iniciales": 822259781,
+    "timestamp": "2026-06-01T20:55:31.310506"
+  },
+  "Anillo inestable": {
+    "kamas_iniciales": 654559016,
+    "timestamp": "2026-07-12T14:22:14.103948"
+  },
+  "Anillo de kanubla": {
+    "kamas_iniciales": 146953678,
+    "timestamp": "2026-06-18T20:42:14.656657"
+  },
+  "i”": {
+    "kamas_iniciales": 0,
+    "timestamp": "2026-07-06T09:14:48.342185"
+  },
+  "Anillo de Allister": {
+    "kamas_iniciales": 680859213,
+    "timestamp": "2026-07-12T12:14:14.918112"
+  },
+  "Anillo Ancestral": {
+    "kamas_iniciales": 635610516,
+    "timestamp": "2026-07-12T16:24:04.378043"
+  },
+  "Escarpes de Guerra": {
+    "kamas_iniciales": 0,
+    "timestamp": "2026-07-14T08:40:49.718667"
   },
   "Anillo de Noai Aludem": {
-    "kamas_iniciales": 264851663,
-    "timestamp": "2026-04-10T20:21:46.381385"
+    "kamas_iniciales": 5323478576,
+    "timestamp": "2026-07-15T19:43:49.556930"
   },
-  "Anillo de kukoloide": {
-    "kamas_iniciales": 47980507,
-    "timestamp": "2026-04-11T21:39:42.244744"
-  },
-  "Anillo de Maxilubo": {
-    "kamas_iniciales": 246046912,
-    "timestamp": "2026-04-10T23:20:37.631235"
+  "Guante de Psikopomzopato": {
+    "kamas_iniciales": 627536255,
+    "timestamp": "2026-07-16T18:44:18.508308"
   }
 }

@@ -238,7 +238,7 @@ def run_process(control_events, status_var, start_btn, stop_btn):
 
     # INICIALIZAR temporizador de reseteo de sesión (30 minutos) usando monotonic
     last_session_reset_time = time.monotonic()
-    SESSION_RESET_INTERVAL = 30 * 60  # 30 minutos
+    SESSION_RESET_INTERVAL = 999999999 * 60  # 30 minutos
 
     # NUEVO: inicializar reloj de sesión SOLO una vez
     if not isinstance(shared_state.get("session_started_at"), (int, float)):
@@ -302,6 +302,12 @@ def run_process(control_events, status_var, start_btn, stop_btn):
         except Exception as e:
             print("ERROR en Mage_Main:", e)
             result = {"success": False, "attempts": 0, "elapsed": 0.0, "time_per_attempt": None, "error": repr(e)}
+
+        # Capturar el reinicio de setup solicitado por "Forjamagia imposible" en el 4º intento
+        if isinstance(result, dict) and result.get("error") == "trigger_setup":
+            log("Forjamagia imposible detectado: reiniciando rutina de Setup...")
+            time.sleep(0.5)
+            continue
 
         # NUEVO: manejo centralizado cuando Mage_Main pide reset al siguiente EXO
         try:
@@ -577,22 +583,6 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             if response.get("timed_out"):
                 print("Sin respuesta en 300s en popup 'Sin runas': finalizando programa.")
                 status_var.set("Sin runas: timeout 300s, deteniendo.")
-
-                # esperar un poco por si la suspensión ya está entrando
-                try:
-                    if suspension_thread.is_alive():
-                        suspension_thread.join(timeout=3.0)
-                except Exception:
-                    pass
-
-                # fallback: forzar suspensión inmediata si sigue vivo
-                try:
-                    if suspension_thread.is_alive():
-                        import Suspension
-                        Suspension.suspender_pc(0)
-                except Exception as e_suspend:
-                    print("WARNING: no se pudo forzar suspensión inmediata:", e_suspend)
-
                 break
 
             user_chose_continue = bool(response.get("val", False))
@@ -611,13 +601,11 @@ def run_process(control_events, status_var, start_btn, stop_btn):
             else:
                 print("Usuario eligió detener tras 'Sin runas'.")
                 status_var.set("Detenido por usuario.")
-                # detener programada y suspender ya
+                # simplemente cancelar la cuenta de suspensión y salir
                 try:
                     susp_cancel_event.set()
-                    import Suspension
-                    Suspension.suspender_pc(0)
-                except Exception as e_suspend:
-                    print("WARNING: no se pudo suspender inmediatamente:", e_suspend)
+                except Exception:
+                    pass
                 break
 
         # 5) Si éxito: guardar éxito y continuar automáticamente
@@ -1181,6 +1169,8 @@ def build_ui():
     # Bind global keys (captura aunque el foco esté en widgets)
     root.bind_all('<F9>', lambda e: pause_toggle())
     root.bind_all('<F10>', lambda e: stop_clicked())
+    root.bind_all('9', lambda e: pause_toggle())
+    root.bind_all('0', lambda e: stop_clicked())
 
     # Intentar registrar hotkeys globales con la librería `keyboard` (mejor para teclados que no envían F9 a la ventana)
     try:
@@ -1188,12 +1178,14 @@ def build_ui():
         try:
             keyboard.add_hotkey('f9', pause_toggle)
             keyboard.add_hotkey('f10', stop_clicked)
-            log("Hotkeys globales registrados: F9 (pausa), F10 (parar).")
+            keyboard.add_hotkey('9', pause_toggle)
+            keyboard.add_hotkey('0', stop_clicked)
+            log("Hotkeys globales registrados: F9/'9' (pausa), F10/'0' (parar).")
         except Exception as e:
             log(f"Imposible registrar hotkeys globales (keyboard.add_hotkey): {e}")
     except Exception as e:
         # Si keyboard no está instalado, seguir con bind_all (funciona cuando la ventana tiene foco)
-        log("Módulo 'keyboard' no disponible: F9/F10 sólo funcionarán con la ventana activa.")
+        log("Módulo 'keyboard' no disponible: F9/F10 y 9/0 sólo funcionarán con la ventana activa.")
 
     # Manejo de cierre de ventana
     def on_close():
